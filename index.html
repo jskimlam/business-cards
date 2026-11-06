@@ -608,6 +608,10 @@ function openDetail(id){
   const driveBtn = document.getElementById('driveSaveBtn');
   if (driveBtn) driveBtn.onclick = () => saveForDrive(c, driveFileName);
   document.getElementById('vcfBtn').onclick = ()=>{
+    if (window.CardAndroid && window.CardAndroid.saveVcard) {
+      window.CardAndroid.saveVcard(c.name || '명함', vcf(c));
+      return;
+    }
     const blob = new Blob(['\ufeff'+vcf(c)], {type:'text/vcard;charset=utf-8'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -641,6 +645,17 @@ async function saveForDrive(c, fileName){
     }
 
     const file = new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+
+    // 0) 안드로이드 APK 네이티브 브릿지
+    if (window.CardAndroid && window.CardAndroid.shareOrSaveImage){
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        window.CardAndroid.shareOrSaveImage(fileName, reader.result);
+        toastMsg('공유창에서 "드라이브"를 선택해 명함 폴더에 저장하세요');
+      };
+      reader.readAsDataURL(blob);
+      return;
+    }
 
     // 1) 모바일 Web Share API (안드로이드 공유창에서 '드라이브' 앱 바로 선택 가능)
     if (navigator.canShare && navigator.canShare({ files: [file] })){
