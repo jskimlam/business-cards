@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1b4b">
+<meta name="description" content="모바일 명함 관리 앱 — 검색, 전화, 메일, vCard 저장">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="명함갈피">
+<title>명함 갈피 — Business Cards</title>
+<style>
+:root{
+  --bg:#0f0d1e; --bg2:#161331; --card:#1e1b3f; --card2:#262153;
+  --line:rgba(255,255,255,.09);
+  --txt:#f1f0fb; --sub:#a5a1c8; --faint:#6f6b96;
+  --acc:#8b7cf7; --acc2:#c4b9ff; --ok:#4ade80;
+  --radius:18px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Noto Sans KR","Apple SD Gothic Neo",Roboto,sans-serif;
+  background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+  color:var(--txt); min-height:100dvh;
+  padding-bottom:calc(40px + var(--safe-b));
+}
+header.app{
+  position:sticky; top:0; z-index:20;
+  padding:calc(env(safe-area-inset-top,0px) + 18px) 18px 12px;
+  background:linear-gradient(180deg,rgba(15,13,30,.96) 70%,rgba(15,13,30,0));
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+h1{font-size:22px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
+h1 .logo{width:28px;height:28px;border-radius:8px;flex:0 0 auto}
+h1 small{font-size:12px;font-weight:600;color:var(--faint);margin-left:auto;background:var(--card);padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+.searchwrap{margin-top:14px;position:relative}
+.searchwrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:17px;height:17px;stroke:var(--faint)}
+#search{
+  width:100%;padding:12px 38px 12px 40px;font-size:15px;color:var(--txt);
+  background:var(--card);border:1px solid var(--line);border-radius:14px;outline:none;
+  transition:border-color .15s;
+}
+#search:focus{border-color:var(--acc)}
+#search::placeholder{color:var(--faint)}
+#clearBtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:none;border:0;background:transparent;color:var(--faint);font-size:19px;padding:6px 8px;cursor:pointer}
+.filters{display:flex;gap:7px;margin-top:11px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.filters::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;
+  background:var(--card);color:var(--sub);border:1px solid var(--line);cursor:pointer;transition:all .15s;
+}
+.chip.on{background:linear-gradient(135deg,#6d5cf0,#8b7cf7);color:#fff;border-color:transparent}
+.chip.sort{margin-left:auto}
+.count{padding:14px 18px 4px;font-size:12px;color:var(--faint);font-weight:600}
+main{padding:8px 16px 0;max-width:640px;margin:0 auto}
+.list{display:flex;flex-direction:column;gap:12px}
+.carditem{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:15px 16px;display:flex;gap:14px;align-items:center;cursor:pointer;
+  transition:transform .12s,border-color .15s;
+}
+.carditem:active{transform:scale(.985)}
+.carditem:hover{border-color:rgba(139,124,247,.45)}
+.avatar{
+  width:50px;height:50px;border-radius:14px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  font-size:19px;font-weight:800;color:#fff;
+  background:linear-gradient(135deg,#6d5cf0,#a78bfa);
+}
+.ci-body{min-width:0;flex:1}
+.ci-name{font-size:16.5px;font-weight:750;letter-spacing:-.01em;display:flex;align-items:baseline;gap:7px}
+.ci-name .hanja{font-size:12.5px;color:var(--sub);font-weight:600}
+.ci-title{font-size:12.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-company{font-size:12.5px;color:var(--acc2);margin-top:5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-actions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+.abtn{
+  width:38px;height:38px;border-radius:12px;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;color:var(--acc2);
+  background:rgba(139,124,247,.10);text-decoration:none;transition:background .15s;
+}
+.abtn:active{background:rgba(139,124,247,.28)}
+.abtn svg{width:18px;height:18px}
+.empty{text-align:center;color:var(--faint);padding:70px 20px;font-size:14px;line-height:1.7}
+.empty b{color:var(--sub)}
+
+/* detail sheet */
+.sheet{
+  position:fixed;inset:0;z-index:50;display:none;
+  align-items:flex-end;justify-content:center;
+}
+.sheet.open{display:flex}
+.sheet .dim{position:absolute;inset:0;background:rgba(5,4,15,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.sheet .panel{
+  position:relative;width:100%;max-width:640px;max-height:92dvh;overflow-y:auto;
+  background:var(--bg2);border-radius:24px 24px 0 0;border:1px solid var(--line);border-bottom:0;
+  padding:14px 18px calc(28px + var(--safe-b));
+  animation:up .22s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.grab{width:42px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:0 auto 16px}
+.d-head{display:flex;gap:15px;align-items:center}
+.d-head .avatar{width:58px;height:58px;font-size:22px;border-radius:16px}
+.d-name{font-size:21px;font-weight:800;letter-spacing:-.02em}
+.d-name .hanja{font-size:14px;color:var(--sub);font-weight:600;margin-left:7px}
+.d-title{font-size:13px;color:var(--sub);margin-top:3px}
+.d-company{font-size:13.5px;color:var(--acc2);font-weight:700;margin-top:8px}
+.d-sub{font-size:12px;color:var(--faint);margin-top:2px;line-height:1.5}
+.d-img{
+  margin-top:16px;border-radius:14px;overflow:hidden;border:1px solid var(--line);
+  background:#fff;display:block;cursor:zoom-in;
+}
+.d-img img{width:100%;display:block}
+.d-tags{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap}
+.d-tags span{font-size:11.5px;font-weight:700;color:var(--acc2);background:rgba(139,124,247,.14);border:1px solid rgba(139,124,247,.3);padding:4px 11px;border-radius:999px}
+.d-rows{margin-top:16px;display:flex;flex-direction:column}
+.d-row{
+  display:flex;align-items:center;gap:13px;padding:13px 2px;border-bottom:1px solid var(--line);
+  text-decoration:none;color:var(--txt);
+}
+.d-row:last-child{border-bottom:0}
+.d-row svg{width:19px;height:19px;stroke:var(--acc2);flex:0 0 auto}
+.d-row .lbl{font-size:11px;color:var(--faint);font-weight:700;width:52px;flex:0 0 auto}
+.d-row .val{font-size:14.5px;flex:1;min-width:0;word-break:break-all}
+.d-row .go{color:var(--faint);font-size:17px;flex:0 0 auto}
+.d-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}
+.dbtn{
+  padding:13px 10px;border-radius:14px;border:0;cursor:pointer;
+  font-size:14px;font-weight:750;font-family:inherit;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  background:var(--card2);color:var(--txt);text-decoration:none;
+}
+.dbtn svg{width:17px;height:17px}
+.dbtn.primary{background:linear-gradient(135deg,#6d5cf0,#8b7cf7);color:#fff}
+footer{max-width:640px;margin:26px auto 0;padding:0 18px;text-align:center;font-size:11.5px;color:var(--faint);line-height:1.8}
+.toast{
+  position:fixed;left:50%;bottom:calc(34px + var(--safe-b));transform:translateX(-50%) translateY(20px);
+  background:#2a2650;color:#fff;font-size:13px;font-weight:650;padding:11px 20px;border-radius:999px;
+  border:1px solid rgba(139,124,247,.5);opacity:0;pointer-events:none;transition:all .25s;z-index:99;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%)}
+@media (min-width:640px){ .carditem{padding:17px 18px} }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>
+    <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><rect x="3" y="9" width="42" height="30" rx="7" fill="#8b7cf7"/><circle cx="16" cy="21" r="4.6" fill="#fff"/><rect x="24" y="17.5" width="15" height="3.4" rx="1.7" fill="#fff"/><rect x="24" y="24.5" width="11" height="3" rx="1.5" fill="#c4b9ff" opacity=".8"/><rect x="10" y="30" width="28" height="3" rx="1.5" fill="#c4b9ff" opacity=".55"/></svg>
+    명함 갈피
+    <small id="totalCount"></small>
+  </h1>
+  <div class="searchwrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="search" type="search" placeholder="이름 · 회사 · 이메일 검색" autocomplete="off">
+    <button id="clearBtn" aria-label="지우기">✕</button>
+  </div>
+  <div class="filters" id="filters"></div>
+</header>
+
+<div class="count" id="count"></div>
+<main>
+  <div class="list" id="list"></div>
+  <div class="empty" id="empty" style="display:none">검색 결과가 없어요.<br><b>다른 키워드</b>로 찾아보세요.</div>
+</main>
+
+<footer>
+  GitHub Pages에서 운영되는 개인 명함 앱이에요 · 설치 후에도 오프라인으로 열려요<br>
+  명함 추가 방법은 리포지토리의 README.md를 참고하세요
+</footer>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="dim" id="dim"></div>
+  <div class="panel" id="panel"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let CARDS = [];
+let state = { q:'', tag:null, sort:'name' };
+const list = document.getElementById('list');
+const empty = document.getElementById('empty');
+const countEl = document.getElementById('count');
+const totalEl = document.getElementById('totalCount');
+const filtersEl = document.getElementById('filters');
+const sheet = document.getElementById('sheet');
+const panel = document.getElementById('panel');
+const toast = document.getElementById('toast');
+
+const ICON = {
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m2.5 6.5 9.5 7 9.5-7"/></svg>',
+  user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>',
+  vcf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>'
+};
+
+function initials(name){
+  const t = name.trim();
+  if (/[가-힣]/.test(t)) return t.slice(t.length >= 3 ? 1 : 0);
+  return t.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}
+
+function toastMsg(m){
+  toast.textContent = m; toast.classList.add('show');
+  setTimeout(()=>toast.classList.remove('show'), 2200);
+}
+
+async function load(){
+  const res = await fetch('data/cards.json');
+  const data = await res.json();
+  CARDS = data.cards || [];
+  totalEl.textContent = CARDS.length + '명';
+  renderFilters();
+  render();
+}
+
+function allTags(){
+  const s = new Set();
+  CARDS.forEach(c => (c.tags||[]).forEach(t => s.add(t)));
+  return [...s];
+}
+
+function renderFilters(){
+  const tags = allTags();
+  filtersEl.innerHTML =
+    `<button class="chip ${state.tag?'':'on'}" data-tag="">전체</button>` +
+    tags.map(t=>`<button class="chip ${state.tag===t?'on':''}" data-tag="${t}">${t}</button>`).join('') +
+    `<button class="chip sort" data-sort>↕ ${state.sort==='name'?'이름순':state.sort==='company'?'회사순':'최근순'}</button>`;
+  filtersEl.querySelectorAll('[data-tag]').forEach(b=>{
+    b.onclick = ()=>{ state.tag = b.dataset.tag || null; renderFilters(); render(); };
+  });
+  filtersEl.querySelector('[data-sort]').onclick = ()=>{
+    state.sort = state.sort==='name' ? 'company' : state.sort==='company' ? 'added' : 'name';
+    renderFilters(); render();
+  };
+}
+
+function filtered(){
+  let arr = CARDS.filter(c=>{
+    if (state.tag && !(c.tags||[]).includes(state.tag)) return false;
+    if (!state.q) return true;
+    const hay = [c.name,c.nameSub,c.title,c.company,c.companySub,c.email,c.address,(c.tags||[]).join(' '),
+      ...(c.phones||[]).map(p=>p.number)].join(' ').toLowerCase();
+    return state.q.toLowerCase().split(/\s+/).every(w=>hay.includes(w));
+  });
+  arr.sort((a,b)=>{
+    if (state.sort==='company') return (a.company||'').localeCompare(b.company||'','ko') || a.name.localeCompare(b.name,'ko');
+    if (state.sort==='added') return (b.added||'').localeCompare(a.added||'') || a.name.localeCompare(b.name,'ko');
+    return a.name.localeCompare(b.name,'ko');
+  });
+  return arr;
+}
+
+function render(){
+  const arr = filtered();
+  countEl.textContent = state.q || state.tag ? `검색 ${arr.length}명 / 전체 ${CARDS.length}명` : `총 ${arr.length}명의 명함`;
+  empty.style.display = arr.length ? 'none' : 'block';
+  list.innerHTML = arr.map(c=>{
+    const mob = (c.phones||[]).find(p=>p.type==='mobile') || (c.phones||[])[0];
+    return `<div class="carditem" data-id="${c.id}">
+      <div class="avatar">${initials(c.name)}</div>
+      <div class="ci-body">
+        <div class="ci-name">${c.name}${c.nameSub?`<span class="hanja">${c.nameSub}</span>`:''}</div>
+        <div class="ci-title">${[c.title,c.companySub].filter(Boolean).join(' · ')||'&nbsp;'}</div>
+        <div class="ci-company">${c.company||''}</div>
+      </div>
+      <div class="ci-actions">
+        ${mob?`<a class="abtn" href="tel:${mob.number.replace(/[^\d+]/g,'')}" aria-label="전화">${ICON.phone}</a>`:''}
+        <a class="abtn" href="mailto:${c.email}" aria-label="메일" onclick="event.stopPropagation()">${ICON.mail}</a>
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.carditem').forEach(el=>{
+    el.onclick = ()=>openDetail(el.dataset.id);
+    const tel = el.querySelector('.abtn');
+    if (tel && tel.getAttribute('href').startsWith('tel:')) tel.onclick = e=>e.stopPropagation();
+  });
+}
+
+function vcf(c){
+  const p = t => (c.phones||[]).find(x=>x.type===t);
+  const mobile = p('mobile'), tel = p('tel');
+  const lines = [
+    'BEGIN:VCARD','VERSION:3.0',
+    `N:${c.name}`,
+    `FN:${c.name}`,
+    c.nameSub ? `X-PHONETIC-LAST-NAME:${c.nameSub}` : '',
+    `ORG:${c.company}`,
+    c.title ? `TITLE:${c.title}` : '',
+    mobile ? `TEL;TYPE=CELL,VOICE:${mobile.number}` : '',
+    tel ? `TEL;TYPE=WORK,VOICE:${tel.number}` : '',
+    c.fax ? `TEL;TYPE=WORK,FAX:${c.fax}` : '',
+    `EMAIL;TYPE=WORK:${c.email}`,
+    c.website ? `URL:${c.website}` : '',
+    c.address ? `ADR;TYPE=WORK:;;${c.address}${c.addressDetail?' '+c.addressDetail:''};;;;` : '',
+    `NOTE:${[c.companySub].filter(Boolean).join(' / ')}`,
+    'END:VCARD'
+  ].filter(Boolean);
+  return lines.join('\r\n');
+}
+
+function openDetail(id){
+  const c = CARDS.find(x=>x.id===id); if(!c) return;
+  const rows = [];
+  (c.phones||[]).forEach(ph=>{
+    rows.push(`<a class="d-row" href="tel:${ph.number.replace(/[^\d+]/g,'')}">${ICON.phone}<span class="lbl">${ph.label}</span><span class="val">${ph.number}</span><span class="go">›</span></a>`);
+  });
+  if (c.fax) rows.push(`<div class="d-row">${ICON.phone}<span class="lbl">Fax</span><span class="val">${c.fax}</span></div>`);
+  if (c.email) rows.push(`<a class="d-row" href="mailto:${c.email}">${ICON.mail}<span class="lbl">Email</span><span class="val">${c.email}</span><span class="go">›</span></a>`);
+  if (c.website) rows.push(`<a class="d-row" href="${c.website}" target="_blank" rel="noopener">${ICON.user}<span class="lbl">Web</span><span class="val">${c.website.replace(/^https?:\/\//,'')}</span><span class="go">›</span></a>`);
+  if (c.address) rows.push(`<div class="d-row">${ICON.user}<span class="lbl">주소</span><span class="val">${c.address}${c.addressDetail?`<br><small style="color:var(--faint)">${c.addressDetail}</small>`:''}</span></div>`);
+
+  panel.innerHTML = `
+    <div class="grab"></div>
+    <div class="d-head">
+      <div class="avatar">${initials(c.name)}</div>
+      <div>
+        <div class="d-name">${c.name}${c.nameSub?`<span class="hanja">${c.nameSub}</span>`:''}</div>
+        <div class="d-title">${c.title||''}</div>
+        <div class="d-company">${c.company||''}</div>
+        ${c.companySub?`<div class="d-sub">${c.companySub}</div>`:''}
+      </div>
+    </div>
+    ${c.tags&&c.tags.length?`<div class="d-tags">${c.tags.map(t=>`<span>${t}</span>`).join('')}</div>`:''}
+    <a class="d-img" href="${c.image}.jpg" target="_blank" rel="noopener" title="원본 크게 보기">
+      <picture>
+        <source type="image/webp" srcset="${c.image}.webp">
+        <img src="${c.image}.jpg" alt="${c.name} 명함 스캔본" loading="lazy">
+      </picture>
+    </a>
+    <div class="d-rows">${rows.join('')}</div>
+    <div class="d-actions">
+      ${(()=>{const m=(c.phones||[]).find(p=>p.type==='mobile')||(c.phones||[])[0];
+        return m?`<a class="dbtn primary" href="tel:${m.number.replace(/[^\d+]/g,'')}">${ICON.phone} 전화 걸기</a>`
+                :`<a class="dbtn primary" href="mailto:${c.email}">${ICON.mail} 메일 보내기</a>`;})()}
+      <a class="dbtn" href="mailto:${c.email}">${ICON.mail} 메일 보내기</a>
+      <button class="dbtn" id="vcfBtn" style="grid-column:1/-1">${ICON.vcf} 연락처로 저장 (.vcf)</button>
+    </div>`;
+  document.getElementById('vcfBtn').onclick = ()=>{
+    const blob = new Blob(['\ufeff'+vcf(c)], {type:'text/vcard;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${c.name.replace(/\s+/g,'_')}_명함.vcf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    toastMsg('연락처 파일을 내려받았어요 — 열어서 주소록에 저장하세요');
+  };
+  sheet.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet(){ sheet.classList.remove('open'); document.body.style.overflow=''; }
+document.getElementById('dim').onclick = closeSheet;
+panel.addEventListener('click', e=>{ if(e.target===panel) closeSheet(); });
+
+const search = document.getElementById('search');
+const clearBtn = document.getElementById('clearBtn');
+search.addEventListener('input', ()=>{
+  state.q = search.value.trim();
+  clearBtn.style.display = state.q ? 'block' : 'none';
+  render();
+});
+clearBtn.onclick = ()=>{ search.value=''; state.q=''; clearBtn.style.display='none'; render(); search.blur(); };
+
+if ('serviceWorker' in navigator) {
+  addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+
+load();
+</script>
+</body>
+</html>

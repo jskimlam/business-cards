@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "cards": [
+    {
+      "id": "lee-younghoo",
+      "name": "이영후",
+      "nameSub": "李英厚",
+      "title": "과장",
+      "company": "주식회사 에이에스",
+      "companySub": "AES · Advanced Energy Service · APEX Energy",
+      "phones": [
+        { "type": "mobile", "label": "Mobile", "number": "010-4801-7563" },
+        { "type": "tel", "label": "Tel", "number": "02-2038-2202" }
+      ],
+      "fax": "02-2038-0054",
+      "email": "younghoo@advancedenergyservice.co.kr",
+      "website": "",
+      "address": "서울특별시 중구 서소문로11길 50 (서소문동, 신아빌딩) 707호",
+      "addressDetail": "우편번호 04515",
+      "image": "images/card-lee-younghoo",
+      "tags": ["국내", "에너지"],
+      "added": "2026-11-06"
+    },
+    {
+      "id": "kawasaki-hiroyuki",
+      "name": "Hiroyuki Kawasaki",
+      "nameSub": "川崎 裕之",
+      "title": "Styrene Group Leader",
+      "company": "ASAHI KASEI CORPORATION",
+      "companySub": "Basic Chemicals Division · Styrene & MMA Sales & Marketing Dept.",
+      "phones": [
+        { "type": "mobile", "label": "Mobile", "number": "+81-70-4547-2146" },
+        { "type": "tel", "label": "Direct", "number": "+81-3-6699-6354" }
+      ],
+      "fax": "+81-3-6699-3444",
+      "email": "kawasaki.hp@om.asahi-kasei.co.jp",
+      "website": "https://www.asahi-kasei.com",
+      "address": "Hibiya Mitsui Tower, 1-1-2 Yurakucho, Chiyoda-ku, Tokyo 100-0006 Japan",
+      "addressDetail": "",
+      "image": "images/card-kawasaki-hiroyuki",
+      "tags": ["일본", "화학"],
+      "added": "2026-11-06"
+    }
+  ]
+}
