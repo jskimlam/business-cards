@@ -3,128 +3,216 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1e1b4b">
-<meta name="description" content="모바일 명함 관리 앱 — 촬영·AI 인식·검색, 전화, 메일, vCard 저장">
+<meta name="theme-color" content="#09090b">
+<meta name="description" content="THE EXECUTIVE VAULT — 글로벌 비즈니스 인맥과 명함을 품격 있게 보관하는 프라이빗 아카이브">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="명함갈피">
-<title>명함 갈피 — Business Cards</title>
+<meta name="apple-mobile-web-app-title" content="Executive Vault">
+<title>THE EXECUTIVE VAULT — 명함 갈피</title>
 <style>
 :root{
-  --bg:#0f0d1e; --bg2:#161331; --card:#1e1b3f; --card2:#262153;
-  --line:rgba(255,255,255,.09);
-  --txt:#f1f0fb; --sub:#a5a1c8; --faint:#6f6b96;
-  --acc:#8b7cf7; --acc2:#c4b9ff; --ok:#4ade80;
-  --radius:18px;
+  --bg:#09090c; --bg2:#121217; --card:#16161f; --card2:#20202b;
+  --line:rgba(255,255,255,.08); --line-gold:rgba(212,175,55,.24);
+  --txt:#f4f4f7; --sub:#a2a2ae; --faint:#6e6e7a;
+  --acc:#d4af37; --acc2:#f3e5ab; --acc-dark:#8f721e;
+  --gold-grad:linear-gradient(135deg, #c5a059 0%, #e5c158 50%, #f3e5ab 100%);
+  --gold-btn:linear-gradient(135deg, #a17f22 0%, #d4af37 60%, #e8ca68 100%);
+  --titanium:linear-gradient(135deg, #262632 0%, #16161f 100%);
+  --ok:#34d399;
+  --radius:20px;
   --safe-b:env(safe-area-inset-bottom,0px);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Noto Sans KR","Apple SD Gothic Neo",Roboto,sans-serif;
-  background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+  background:radial-gradient(circle at 50% 0%, #1a1824 0%, #09090c 70%);
   color:var(--txt); min-height:100dvh;
   padding-bottom:calc(110px + var(--safe-b));
 }
+
+/* Header */
 header.app{
   position:sticky; top:0; z-index:20;
-  padding:calc(env(safe-area-inset-top,0px) + 18px) 18px 12px;
-  background:linear-gradient(180deg,rgba(15,13,30,.96) 70%,rgba(15,13,30,0));
-  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 18px 12px;
+  background:linear-gradient(180deg,rgba(9,9,12,.97) 75%,rgba(9,9,12,0));
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(212,175,55,.08);
 }
-h1{font-size:22px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
-h1 .logo{width:28px;height:28px;border-radius:8px;flex:0 0 auto}
-h1 small{font-size:12px;font-weight:600;color:var(--faint);margin-left:auto;background:var(--card);padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+.brand-bar{display:flex;align-items:center;gap:10px}
+.brand-crest{
+  width:32px;height:32px;border-radius:9px;flex:0 0 auto;
+  background:var(--gold-grad);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 10px rgba(212,175,55,.28);
+}
+.brand-crest svg{width:18px;height:18px;stroke:#09090c}
+.brand-name{font-size:18px;font-weight:850;letter-spacing:-.02em;color:var(--txt)}
+.brand-name span{background:var(--gold-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.brand-badge{
+  font-size:11px;font-weight:700;color:var(--acc2);margin-left:auto;
+  background:rgba(212,175,55,.10);padding:3px 9px;border-radius:999px;border:1px solid var(--line-gold);
+}
 .gear{
-  flex:0 0 auto;width:34px;height:34px;border-radius:11px;border:1px solid var(--line);
+  flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);
   background:var(--card);color:var(--sub);display:flex;align-items:center;justify-content:center;
-  cursor:pointer;margin-left:8px;
+  cursor:pointer;margin-left:6px;transition:border-color .15s;
 }
+.gear:hover{border-color:var(--acc)}
 .gear svg{width:17px;height:17px}
-.gear.has{color:var(--ok);border-color:rgba(74,222,128,.4)}
-.searchwrap{margin-top:14px;position:relative}
+.gear.has{color:var(--acc);border-color:var(--acc)}
+
+/* Hero Section (명품 대문) */
+.hero{
+  max-width:640px;margin:16px auto 10px;padding:26px 20px 24px;
+  background:linear-gradient(180deg, rgba(26,24,36,.7) 0%, rgba(18,18,23,.9) 100%);
+  border:1px solid var(--line-gold);border-radius:24px;
+  text-align:center;position:relative;overflow:hidden;
+  box-shadow:0 12px 36px rgba(0,0,0,.5), inset 0 1px 0 rgba(212,175,55,.2);
+}
+.hero::before{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(circle at 50% 20%, rgba(212,175,55,.08) 0%, transparent 50%);
+  pointer-events:none;
+}
+.hero-tag{
+  display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.08em;
+  color:var(--acc);text-transform:uppercase;padding:5px 12px;border-radius:999px;
+  background:rgba(212,175,55,.08);border:1px solid var(--line-gold);margin-bottom:14px;
+}
+.hero-title{
+  font-size:24px;font-weight:900;letter-spacing:-.03em;line-height:1.25;margin-bottom:8px;
+  background:linear-gradient(180deg, #fff 0%, #e2e2ea 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.hero-desc{
+  font-size:13px;color:var(--sub);line-height:1.65;max-width:440px;margin:0 auto 18px;
+}
+.hero-meta{
+  display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;
+}
+.hero-pill{
+  font-size:11.5px;font-weight:650;color:var(--acc2);background:rgba(255,255,255,.04);
+  padding:5px 12px;border-radius:999px;border:1px solid var(--line);
+}
+.hero-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:400px;margin:0 auto}
+.hbtn{
+  border:0;cursor:pointer;padding:13px 14px;border-radius:14px;font-size:13.5px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;gap:7px;font-family:inherit;
+  transition:transform .12s, box-shadow .15s;
+}
+.hbtn:active{transform:scale(.97)}
+.hbtn.primary{
+  background:var(--gold-btn);color:#09090c;
+  box-shadow:0 4px 16px rgba(212,175,55,.3);
+}
+.hbtn.secondary{
+  background:var(--card2);color:var(--txt);border:1px solid var(--line);
+}
+.hbtn svg{width:16px;height:16px}
+
+/* Vault Drawer Controls */
+.vault-drawer{max-width:640px;margin:12px auto 0;padding:0 16px}
+.vault-locked-notice{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 18px;text-align:center;margin-top:10px;display:none;
+}
+.vault-locked-notice.show{display:block}
+.vault-locked-notice .lock-ic{width:44px;height:44px;border-radius:50%;background:rgba(212,175,55,.1);border:1px solid var(--line-gold);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:var(--acc)}
+.vault-locked-notice b{display:block;font-size:15px;color:var(--txt);margin-bottom:5px}
+.vault-locked-notice p{font-size:12.5px;color:var(--sub);line-height:1.6;margin-bottom:14px}
+.vault-unlock-btn{
+  background:var(--gold-btn);color:#09090c;border:0;cursor:pointer;font-family:inherit;
+  padding:10px 18px;border-radius:999px;font-size:13px;font-weight:800;
+}
+
+/* Search & Filters */
+.search-section{margin-top:14px}
+.searchwrap{position:relative}
 .searchwrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:17px;height:17px;stroke:var(--faint)}
 #search{
-  width:100%;padding:12px 38px 12px 40px;font-size:15px;color:var(--txt);
+  width:100%;padding:12px 38px 12px 40px;font-size:14.5px;color:var(--txt);
   background:var(--card);border:1px solid var(--line);border-radius:14px;outline:none;
   transition:border-color .15s;
 }
-#search:focus{border-color:var(--acc)}
+#search:focus{border-color:var(--acc);box-shadow:0 0 0 2px rgba(212,175,55,.15)}
 #search::placeholder{color:var(--faint)}
 #clearBtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:none;border:0;background:transparent;color:var(--faint);font-size:19px;padding:6px 8px;cursor:pointer}
 .filters{display:flex;gap:7px;margin-top:11px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .filters::-webkit-scrollbar{display:none}
 .chip{
-  flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;
+  flex:0 0 auto;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:650;
   background:var(--card);color:var(--sub);border:1px solid var(--line);cursor:pointer;transition:all .15s;
 }
-.chip.on{background:linear-gradient(135deg,#6d5cf0,#8b7cf7);color:#fff;border-color:transparent}
+.chip.on{background:var(--gold-btn);color:#09090c;border-color:transparent;font-weight:800}
 .chip.sort{margin-left:auto}
 .count{padding:14px 18px 4px;font-size:12px;color:var(--faint);font-weight:600}
+
+/* List & Card Item */
 main{padding:8px 16px 0;max-width:640px;margin:0 auto}
 .list{display:flex;flex-direction:column;gap:12px}
 .carditem{
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:15px 16px;display:flex;gap:14px;align-items:center;cursor:pointer;
-  transition:transform .12s,border-color .15s;position:relative;
+  background:linear-gradient(180deg, var(--card) 0%, #121218 100%);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 17px;display:flex;gap:14px;align-items:center;cursor:pointer;
+  transition:transform .12s,border-color .15s,box-shadow .15s;position:relative;
 }
 .carditem:active{transform:scale(.985)}
-.carditem:hover{border-color:rgba(139,124,247,.45)}
+.carditem:hover{border-color:var(--line-gold);box-shadow:0 4px 20px rgba(0,0,0,.4)}
 .mine{
-  position:absolute;top:-1px;right:14px;font-size:9.5px;font-weight:800;letter-spacing:.04em;
-  color:#0f0d1e;background:linear-gradient(135deg,#4ade80,#22d3ee);padding:3px 8px;border-radius:0 0 6px 6px;
+  position:absolute;top:-1px;right:14px;font-size:9.5px;font-weight:850;letter-spacing:.04em;
+  color:#09090c;background:var(--gold-grad);padding:3px 8px;border-radius:0 0 6px 6px;
 }
 .avatar{
   width:50px;height:50px;border-radius:14px;flex:0 0 auto;
   display:flex;align-items:center;justify-content:center;
-  font-size:19px;font-weight:800;color:#fff;
-  background:linear-gradient(135deg,#6d5cf0,#a78bfa);
+  font-size:18px;font-weight:850;color:var(--acc2);
+  background:var(--titanium);border:1px solid var(--line-gold);
 }
 .ci-body{min-width:0;flex:1}
-.ci-name{font-size:16.5px;font-weight:750;letter-spacing:-.01em;display:flex;align-items:baseline;gap:7px}
-.ci-name .hanja{font-size:12.5px;color:var(--sub);font-weight:600}
+.ci-name{font-size:16.5px;font-weight:800;letter-spacing:-.01em;display:flex;align-items:baseline;gap:7px}
+.ci-name .hanja{font-size:12.5px;color:var(--acc2);font-weight:600}
 .ci-title{font-size:12.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ci-company{font-size:12.5px;color:var(--acc2);margin-top:5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-company{font-size:12.5px;color:var(--acc);margin-top:5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ci-actions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
 .abtn{
   width:38px;height:38px;border-radius:12px;border:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;color:var(--acc2);
-  background:rgba(139,124,247,.10);text-decoration:none;transition:background .15s;
+  background:rgba(212,175,55,.08);text-decoration:none;transition:background .15s;
 }
-.abtn:active{background:rgba(139,124,247,.28)}
+.abtn:active{background:rgba(212,175,55,.24)}
 .abtn svg{width:18px;height:18px}
-.empty{text-align:center;color:var(--faint);padding:70px 20px;font-size:14px;line-height:1.7}
-.empty b{color:var(--sub)}
+.empty{text-align:center;color:var(--faint);padding:60px 20px;font-size:14px;line-height:1.7}
+.empty b{color:var(--acc2)}
 
 /* FAB */
 .fab{
   position:fixed;right:18px;bottom:calc(24px + var(--safe-b));z-index:30;
-  border:0;cursor:pointer;color:#fff;font-family:inherit;
-  padding:15px 21px;border-radius:999px;font-size:14.5px;font-weight:800;letter-spacing:-.01em;
+  border:0;cursor:pointer;color:#09090c;font-family:inherit;
+  padding:15px 22px;border-radius:999px;font-size:14.5px;font-weight:850;letter-spacing:-.01em;
   display:flex;align-items:center;gap:9px;
-  background:linear-gradient(135deg,#6d5cf0,#a855f7);
-  box-shadow:0 10px 30px rgba(109,92,240,.45),0 3px 10px rgba(0,0,0,.4);
+  background:var(--gold-btn);
+  box-shadow:0 10px 28px rgba(212,175,55,.35),0 3px 10px rgba(0,0,0,.6);
   transition:transform .12s;
 }
 .fab:active{transform:scale(.95)}
 .fab svg{width:20px;height:20px}
 
-/* sheets */
+/* Sheets & Modals */
 .sheet{position:fixed;inset:0;z-index:50;display:none;align-items:flex-end;justify-content:center}
 .sheet.open{display:flex}
-.sheet .dim{position:absolute;inset:0;background:rgba(5,4,15,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.sheet .dim{position:absolute;inset:0;background:rgba(4,4,6,.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 .sheet .panel{
   position:relative;width:100%;max-width:640px;max-height:92dvh;overflow-y:auto;
-  background:var(--bg2);border-radius:24px 24px 0 0;border:1px solid var(--line);border-bottom:0;
+  background:var(--bg2);border-radius:24px 24px 0 0;border:1px solid var(--line-gold);border-bottom:0;
   padding:14px 18px calc(28px + var(--safe-b));
   animation:up .22s cubic-bezier(.2,.8,.3,1);
 }
 @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
-.grab{width:42px;height:4px;border-radius:99px;background:rgba(255,255,255,.22);margin:0 auto 16px}
-h2.sh{font-size:17px;font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+.grab{width:42px;height:4px;border-radius:99px;background:rgba(255,255,255,.2);margin:0 auto 16px}
+h2.sh{font-size:18px;font-weight:850;letter-spacing:-.01em;margin-bottom:4px;color:var(--txt)}
 p.shd{font-size:12.5px;color:var(--sub);line-height:1.6;margin-bottom:14px}
 .addmenu{display:grid;gap:10px}
 .addbtn{
@@ -132,43 +220,42 @@ p.shd{font-size:12.5px;color:var(--sub);line-height:1.6;margin-bottom:14px}
   display:flex;align-items:center;gap:13px;cursor:pointer;color:var(--txt);font-family:inherit;text-align:left;
 }
 .addbtn:active{background:var(--card2)}
-.addbtn .ic{width:42px;height:42px;border-radius:13px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:19px;background:rgba(139,124,247,.14)}
+.addbtn .ic{width:42px;height:42px;border-radius:13px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:19px;background:rgba(212,175,55,.12);border:1px solid var(--line-gold)}
 .addbtn b{display:block;font-size:14.5px;font-weight:750}
 .addbtn span{display:block;font-size:11.5px;color:var(--faint);margin-top:2px}
-.addbtn svg{width:20px;height:20px}
 
-/* detail */
+/* Detail Sheet */
 .d-head{display:flex;gap:15px;align-items:center}
 .d-head .avatar{width:58px;height:58px;font-size:22px;border-radius:16px}
-.d-name{font-size:21px;font-weight:800;letter-spacing:-.02em}
-.d-name .hanja{font-size:14px;color:var(--sub);font-weight:600;margin-left:7px}
+.d-name{font-size:21px;font-weight:850;letter-spacing:-.02em}
+.d-name .hanja{font-size:14px;color:var(--acc2);font-weight:600;margin-left:7px}
 .d-title{font-size:13px;color:var(--sub);margin-top:3px}
-.d-company{font-size:13.5px;color:var(--acc2);font-weight:700;margin-top:8px}
+.d-company{font-size:14px;color:var(--acc);font-weight:750;margin-top:8px}
 .d-sub{font-size:12px;color:var(--faint);margin-top:2px;line-height:1.5}
 .d-img{margin-top:16px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#fff;display:block}
 .d-img img{width:100%;display:block}
 a.d-img{cursor:zoom-in}
 .d-tags{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap}
-.d-tags span{font-size:11.5px;font-weight:700;color:var(--acc2);background:rgba(139,124,247,.14);border:1px solid rgba(139,124,247,.3);padding:4px 11px;border-radius:999px}
+.d-tags span{font-size:11.5px;font-weight:700;color:var(--acc2);background:rgba(212,175,55,.1);border:1px solid var(--line-gold);padding:4px 11px;border-radius:999px}
 .d-rows{margin-top:16px;display:flex;flex-direction:column}
 .d-row{display:flex;align-items:center;gap:13px;padding:13px 2px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--txt)}
 .d-row:last-child{border-bottom:0}
-.d-row svg{width:19px;height:19px;stroke:var(--acc2);flex:0 0 auto}
+.d-row svg{width:19px;height:19px;stroke:var(--acc);flex:0 0 auto}
 .d-row .lbl{font-size:11px;color:var(--faint);font-weight:700;width:52px;flex:0 0 auto}
 .d-row .val{font-size:14.5px;flex:1;min-width:0;word-break:break-all}
 .d-row .go{color:var(--faint);font-size:17px;flex:0 0 auto}
 .d-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}
 .dbtn{
   padding:13px 10px;border-radius:14px;border:0;cursor:pointer;
-  font-size:14px;font-weight:750;font-family:inherit;
+  font-size:14px;font-weight:800;font-family:inherit;
   display:flex;align-items:center;justify-content:center;gap:7px;
   background:var(--card2);color:var(--txt);text-decoration:none;
 }
 .dbtn svg{width:17px;height:17px}
-.dbtn.primary{background:linear-gradient(135deg,#6d5cf0,#8b7cf7);color:#fff}
-.dbtn.danger{background:rgba(248,113,113,.14);color:#fca5a5;border:1px solid rgba(248,113,113,.3)}
+.dbtn.primary{background:var(--gold-btn);color:#09090c}
+.dbtn.danger{background:rgba(248,113,113,.12);color:#fca5a5;border:1px solid rgba(248,113,113,.3)}
 
-/* form */
+/* Form */
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .fgrid .full{grid-column:1/-1}
 .fld label{display:block;font-size:11px;font-weight:750;color:var(--faint);margin:10px 2px 5px;letter-spacing:.02em}
@@ -176,7 +263,7 @@ a.d-img{cursor:zoom-in}
   width:100%;padding:11px 13px;font-size:14px;color:var(--txt);font-family:inherit;
   background:var(--card);border:1px solid var(--line);border-radius:12px;outline:none;
 }
-.fld input:focus,.fld textarea:focus{border-color:var(--acc)}
+.fld input:focus,.fld textarea:focus{border-color:var(--acc);box-shadow:0 0 0 2px rgba(212,175,55,.15)}
 .fld textarea{resize:vertical;min-height:56px}
 .preview{
   margin:6px 0 4px;border-radius:14px;overflow:hidden;border:1px solid var(--line);
@@ -185,16 +272,16 @@ a.d-img{cursor:zoom-in}
 .preview img{width:100%;display:block;max-height:38dvh;object-fit:cover}
 .preview .rebtn{
   position:absolute;right:10px;bottom:10px;border:0;cursor:pointer;font-family:inherit;
-  background:rgba(15,13,30,.82);color:#fff;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:999px;
+  background:rgba(9,9,12,.85);color:#fff;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:999px;
 }
 .aistatus{
   display:none;margin-top:12px;padding:11px 14px;border-radius:12px;font-size:12.5px;line-height:1.55;
-  background:rgba(139,124,247,.10);border:1px solid rgba(139,124,247,.3);color:var(--acc2);
+  background:rgba(212,175,55,.08);border:1px solid var(--line-gold);color:var(--acc2);
 }
 .aistatus.show{display:block}
 .aistatus.err{background:rgba(248,113,113,.10);border-color:rgba(248,113,113,.35);color:#fca5a5}
 .spin{
-  display:inline-block;width:12px;height:12px;border:2px solid rgba(196,185,255,.35);border-top-color:var(--acc2);
+  display:inline-block;width:12px;height:12px;border:2px solid rgba(212,175,55,.3);border-top-color:var(--acc);
   border-radius:50%;vertical-align:-2px;margin-right:7px;animation:sp .8s linear infinite;
 }
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -206,49 +293,95 @@ a.d-img{cursor:zoom-in}
 }
 .setrow select:focus,.setrow input:focus{border-color:var(--acc)}
 .note{font-size:11.5px;color:var(--faint);line-height:1.7;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-top:6px}
-.note b{color:var(--sub)}
-footer{max-width:640px;margin:26px auto 0;padding:0 18px;text-align:center;font-size:11.5px;color:var(--faint);line-height:1.8}
+.note b{color:var(--acc2)}
+
+footer{max-width:640px;margin:28px auto 0;padding:0 18px;text-align:center;font-size:11.5px;color:var(--faint);line-height:1.8}
 .toast{
   position:fixed;left:50%;bottom:calc(88px + var(--safe-b));transform:translateX(-50%) translateY(20px);
-  background:#2a2650;color:#fff;font-size:13px;font-weight:650;padding:11px 20px;border-radius:999px;
-  border:1px solid rgba(139,124,247,.5);opacity:0;pointer-events:none;transition:all .25s;z-index:99;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;
+  background:#1a1824;color:#fff;font-size:13px;font-weight:700;padding:11px 20px;border-radius:999px;
+  border:1px solid var(--line-gold);opacity:0;pointer-events:none;transition:all .25s;z-index:99;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis;
+  box-shadow:0 8px 24px rgba(0,0,0,.6);
 }
 .toast.show{opacity:1;transform:translateX(-50%)}
-@media (min-width:640px){ .carditem{padding:17px 18px} }
 </style>
 </head>
 <body>
 
 <header class="app">
-  <h1>
-    <svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><rect x="3" y="9" width="42" height="30" rx="7" fill="#8b7cf7"/><circle cx="16" cy="21" r="4.6" fill="#fff"/><rect x="24" y="17.5" width="15" height="3.4" rx="1.7" fill="#fff"/><rect x="24" y="24.5" width="11" height="3" rx="1.5" fill="#c4b9ff" opacity=".8"/><rect x="10" y="30" width="28" height="3" rx="1.5" fill="#c4b9ff" opacity=".55"/></svg>
-    명함 갈피
-    <small id="totalCount"></small>
+  <div class="brand-bar">
+    <div class="brand-crest">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+    </div>
+    <div class="brand-name">THE EXECUTIVE <span>VAULT</span></div>
+    <div class="brand-badge" id="totalCount">2 CARDS</div>
     <button class="gear" id="gearBtn" aria-label="AI 설정">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
-  </h1>
-  <div class="searchwrap">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="search" type="search" placeholder="이름 · 회사 · 이메일 검색" autocomplete="off">
-    <button id="clearBtn" aria-label="지우기">✕</button>
   </div>
-  <div class="filters" id="filters"></div>
 </header>
 
-<div class="count" id="count"></div>
-<main>
+<section class="hero" id="heroSection">
+  <div class="hero-tag">🔒 Confidential Executive Network</div>
+  <h1 class="hero-title">글로벌 비즈니스 명함 보관함</h1>
+  <p class="hero-desc">석유화학·글로벌 파트너스의 핵심 연락처와 스캔본을 안전하고 품격 있게 보관하는 프라이빗 아카이브입니다.</p>
+  
+  <div class="hero-meta">
+    <div class="hero-pill">🛡️ 기기 내부 E2E 보관</div>
+    <div class="hero-pill" id="heroCountPill">📇 파트너 2명 보관 중</div>
+    <div class="hero-pill">⚡ 원터치 vCard & 직통 연결</div>
+  </div>
+
+  <div class="hero-actions">
+    <button class="hbtn primary" id="toggleVaultBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <span id="toggleVaultTxt">보관함 열기</span>
+    </button>
+    <button class="hbtn secondary" id="heroAddBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      명함 촬영 / 스캔
+    </button>
+  </div>
+</section>
+
+<div class="vault-drawer">
+  <!-- Locked Cover Notice -->
+  <div class="vault-locked-notice" id="vaultLockedNotice">
+    <div class="lock-ic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <b>프라이빗 모드로 보호 중</b>
+    <p>개인정보 보호를 위해 대문에서 명함 목록을 가려두었습니다.<br>보관함을 열어 파트너 목록을 확인하세요.</p>
+    <button class="vault-unlock-btn" id="vaultNoticeUnlockBtn">보관함 명함 보기</button>
+  </div>
+
+  <!-- Search & Filter Controls -->
+  <div class="search-section" id="searchSection" style="display:none">
+    <div class="searchwrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="이름 · 회사 · 이메일 검색" autocomplete="off">
+      <button id="clearBtn" aria-label="지우기">✕</button>
+    </div>
+    <div class="filters" id="filters"></div>
+  </div>
+</div>
+
+<div class="count" id="count" style="display:none"></div>
+
+<main id="mainSection" style="display:none">
   <div class="list" id="list"></div>
   <div class="empty" id="empty" style="display:none">검색 결과가 없어요.<br><b>다른 키워드</b>로 찾아보거나 오른쪽 아래 <b>📷 버튼</b>으로 명함을 추가하세요.</div>
 </main>
 
 <footer>
-  GitHub Pages에서 운영되는 개인 명함 앱이에요 · 설치 후에도 오프라인으로 열려요<br>
-  📷로 찍은 명함은 이 기기에 저장되고, 리포지토리 README.md에 추가 방법이 있어요
+  THE EXECUTIVE VAULT · GitHub Pages 프라이빗 명함 앱<br>
+  📷로 촬영한 명함은 이 기기 내부에 보관되며, 오프라인에서도 열립니다
 </footer>
 
 <button class="fab" id="fabBtn">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
   명함 촬영 / 추가
 </button>
 <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
@@ -262,11 +395,11 @@ footer{max-width:640px;margin:26px auto 0;padding:0 18px;text-align:center;font-
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
-let BASE = [];      // data/cards.json 의 명함 (읽기 전용)
-let MY = [];        // 이 기기에서 추가한 명함 (localStorage)
+let BASE = [];
+let MY = [];
 let CFG = {provider:'gemini', model:'', key:''};
-let CARDS = [];     // 표시용 병합 목록
-let state = { q:'', tag:null, sort:'name' };
+let CARDS = [];
+let state = { q:'', tag:null, sort:'name', vaultOpen:false };
 
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1';
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
@@ -281,6 +414,15 @@ const sheet = document.getElementById('sheet');
 const panel = document.getElementById('panel');
 const toast = document.getElementById('toast');
 const gearBtn = document.getElementById('gearBtn');
+
+const toggleVaultBtn = document.getElementById('toggleVaultBtn');
+const toggleVaultTxt = document.getElementById('toggleVaultTxt');
+const heroAddBtn = document.getElementById('heroAddBtn');
+const heroCountPill = document.getElementById('heroCountPill');
+const vaultLockedNotice = document.getElementById('vaultLockedNotice');
+const vaultNoticeUnlockBtn = document.getElementById('vaultNoticeUnlockBtn');
+const searchSection = document.getElementById('searchSection');
+const mainSection = document.getElementById('mainSection');
 
 const ICON = {
   phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2z"/></svg>',
@@ -303,7 +445,31 @@ function openSheet(html){ panel.innerHTML = '<div class="grab"></div>'+html; she
 function closeSheet(){ sheet.classList.remove('open'); document.body.style.overflow=''; }
 document.getElementById('dim').onclick = closeSheet;
 
-/* ---------- load & merge ---------- */
+/* ---------- Vault Drawer Toggle (프라이빗 대문 보관함) ---------- */
+function setVaultOpen(open){
+  state.vaultOpen = open;
+  if (open){
+    vaultLockedNotice.classList.remove('show');
+    searchSection.style.display = 'block';
+    countEl.style.display = 'block';
+    mainSection.style.display = 'block';
+    toggleVaultTxt.textContent = '보관함 닫기';
+    toggleVaultBtn.classList.remove('primary');
+    toggleVaultBtn.classList.add('secondary');
+  } else {
+    vaultLockedNotice.classList.add('show');
+    searchSection.style.display = 'none';
+    countEl.style.display = 'none';
+    mainSection.style.display = 'none';
+    toggleVaultTxt.textContent = '보관함 열기';
+    toggleVaultBtn.classList.remove('secondary');
+    toggleVaultBtn.classList.add('primary');
+  }
+}
+toggleVaultBtn.onclick = ()=>setVaultOpen(!state.vaultOpen);
+vaultNoticeUnlockBtn.onclick = ()=>setVaultOpen(true);
+
+/* ---------- Load & Merge ---------- */
 async function load(){
   const res = await fetch('data/cards.json');
   const data = await res.json();
@@ -312,7 +478,8 @@ async function load(){
 }
 function rebuild(){
   CARDS = BASE.concat(MY);
-  totalEl.textContent = CARDS.length + '명';
+  totalEl.textContent = CARDS.length + ' CARDS';
+  heroCountPill.textContent = '📇 파트너 ' + CARDS.length + '명 보관 중';
   renderFilters();
   render();
 }
@@ -321,7 +488,7 @@ function saveMy(){
   rebuild();
 }
 
-/* ---------- filters / list ---------- */
+/* ---------- Filters / List ---------- */
 function allTags(){
   const s = new Set();
   CARDS.forEach(c => (c.tags||[]).forEach(t => s.add(t)));
@@ -384,7 +551,7 @@ function render(){
 function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function telHref(n){ return (n||'').replace(/[^\d+]/g,''); }
 
-/* ---------- detail ---------- */
+/* ---------- Detail Sheet ---------- */
 function imgSrc(c){ return c.imageData ? c.imageData : c.image+'.webp'; }
 function openDetail(id){
   const c = CARDS.find(x=>x.id===id); if(!c) return;
@@ -456,16 +623,16 @@ function vcf(c){
   return lines.join('\r\n');
 }
 
-/* ---------- add flow ---------- */
+/* ---------- Add Flow ---------- */
 const fabBtn = document.getElementById('fabBtn');
 const fileCamera = document.getElementById('fileCamera');
 const fileAlbum = document.getElementById('fileAlbum');
 
-fabBtn.onclick = ()=>{
+function triggerAddMenu(){
   const aiOn = !!(CFG.key);
   openSheet(`
-    <h2 class="sh">명함 추가</h2>
-    <p class="shd">${aiOn ? '사진을 찍으면 <b style="color:var(--ok)">AI가 명함 내용을 읽어</b> 입력창에 채워 드려요.' : '사진을 찍으면 <b style="color:var(--ok)">무료 내장 OCR</b>이 전화·이메일 등을 자동으로 읽어 드려요. 키 없이도 완전 동작해요.'}</p>
+    <h2 class="sh">명함 스캔 & 추가</h2>
+    <p class="shd">${aiOn ? '사진을 찍으면 <b style="color:var(--acc)">AI가 명함 내용을 읽어</b> 입력창에 채워 드려요.' : '사진을 찍으면 <b style="color:var(--acc)">무료 내장 OCR</b>이 전화·이메일 등을 자동으로 읽어 드려요. 키 없이도 완전 동작해요.'}</p>
     <div class="addmenu">
       <button class="addbtn" id="mCam">
         <span class="ic">📷</span>
@@ -483,11 +650,14 @@ fabBtn.onclick = ()=>{
   document.getElementById('mCam').onclick = ()=>fileCamera.click();
   document.getElementById('mAlb').onclick = ()=>fileAlbum.click();
   document.getElementById('mMan').onclick = ()=>openAddForm({});
-};
+}
+fabBtn.onclick = triggerAddMenu;
+heroAddBtn.onclick = triggerAddMenu;
+
 fileCamera.onchange = e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); fileCamera.value=''; };
 fileAlbum.onchange  = e=>{ if(e.target.files[0]) handleImage(e.target.files[0]); fileAlbum.value=''; };
 
-/* 이미지 압축: 최대 1200px, WebP 100KB대 목표 */
+/* 이미지 압축 */
 async function compressImage(file){
   const bmp = await createImageBitmap(file);
   const maxW = 1200;
@@ -508,7 +678,7 @@ async function handleImage(file){
   openAddForm({imageData:dataUrl, ai:true});
 }
 
-/* ---------- add / edit form ---------- */
+/* ---------- Add / Edit Form ---------- */
 function openAddForm({card=null, imageData=null, ai=false}={}){
   const editing = !!card;
   const c = card || {name:'',nameSub:'',title:'',company:'',companySub:'',phones:[],fax:'',email:'',website:'',address:'',addressDetail:'',tags:[],added:new Date().toISOString().slice(0,10)};
@@ -516,8 +686,8 @@ function openAddForm({card=null, imageData=null, ai=false}={}){
   const mob = g('mobile'), tel = g('tel');
   const img = editing ? (c.imageData||null) : imageData;
   openSheet(`
-    <h2 class="sh">${editing?'명함 수정':'새 명함'}</h2>
-    <p class="shd">${editing?'내용을 고치거나 이 기기에서 삭제할 수 있어요.':'AI 인식 결과를 확인하고 고친 뒤 저장하세요.'}</p>
+    <h2 class="sh">${editing?'명함 수정':'새 명함 등록'}</h2>
+    <p class="shd">${editing?'내용을 고치거나 이 기기에서 삭제할 수 있어요.':'인식 결과를 확인하고 고친 뒤 안전하게 저장하세요.'}</p>
     <div id="prevWrap">
       ${img
         ? `<div class="preview"><img src="${img}" alt="명함 사진 미리보기"><button class="rebtn" id="reShoot">다시 찍기</button></div>`
@@ -585,6 +755,7 @@ function openAddForm({card=null, imageData=null, ai=false}={}){
     if (editing){ MY = MY.map(x=>x.id===c.id ? obj : x); toastMsg('수정했어요'); }
     else { MY.push(obj); toastMsg('명함을 저장했어요 — 목록에 바로 반영됐어요'); }
     saveMy();
+    setVaultOpen(true);
     closeSheet();
   };
 
@@ -596,13 +767,13 @@ function openAddForm({card=null, imageData=null, ai=false}={}){
   };
 }
 
-/* ---------- 무료 OCR (키 불필요, Tesseract.js) ---------- */
+/* ---------- 무료 OCR (Tesseract.js) ---------- */
 async function runOCR(dataUrl, el){
   if (typeof Tesseract === 'undefined'){
     setAIStatus(el, '⚠️ OCR 엔진을 불러오지 못했어요(오프라인?). 내용을 직접 입력하면 저장돼요.', true);
     return;
   }
-  setAIStatus(el, '<span class="spin"></span>무료 OCR로 글자를 읽고 있어요… (10~30초, 처음 한 번은 더 걸려요)');
+  setAIStatus(el, '<span class="spin"></span>무료 OCR로 글자를 읽고 있어요… (10~30초)');
   try {
     const res = await Tesseract.recognize(dataUrl, 'kor+eng');
     const text = (res.data.text||'').trim();
@@ -654,8 +825,8 @@ function ocrExtract(text){
 /* ---------- AI 인식 ---------- */
 const AI_PROMPT = `You are a business card reader. Read the business card image and extract its information.
 Return ONLY a JSON object (no markdown, no commentary) with these keys; use null for anything not present:
-{"name": string, "nameSub": string (hanja/romaji/alternate script of the name), "title": string (job title), "company": string, "companySub": string (department/division/brand line), "mobile": string, "tel": string (main/office phone), "fax": string, "email": string, "website": string, "address": string, "addressDetail": string (postal code, building, suite), "tags": [1-3 short Korean tags such as "국내","일본","화학","에너지" based on country and industry]}
-Keep phone numbers, emails and addresses exactly as printed (including +81 prefixes, dashes, postal codes).`;
+{"name": string, "nameSub": string, "title": string, "company": string, "companySub": string, "mobile": string, "tel": string, "fax": string, "email": string, "website": string, "address": string, "addressDetail": string, "tags": [1-3 short Korean tags]}
+Keep phone numbers, emails and addresses exactly as printed.`;
 
 function stripFences(s){
   s = s.trim();
@@ -667,13 +838,13 @@ function setAIStatus(el, html, isErr){
   el.classList.add('show'); el.classList.toggle('err', !!isErr); el.innerHTML = html;
 }
 async function runAI(dataUrl, el){
-  setAIStatus(el, '<span class="spin"></span>AI가 명함을 읽고 있어요… (몇 초 걸려요)');
+  setAIStatus(el, '<span class="spin"></span>AI가 명함을 읽고 있어요… (몇 초 소요)');
   try {
     const j = await aiParse(dataUrl);
     fillForm(j);
-    setAIStatus(el, '✅ AI 인식 완료 — 읽은 내용을 입력창에 채웠어요. 틀린 부분은 직접 고치세요.');
+    setAIStatus(el, '✅ AI 인식 완료 — 읽은 내용을 입력창에 채웠어요.');
   } catch(err){
-    setAIStatus(el, '⚠️ AI 인식 실패: '+esc(err.message)+'<br>사진은 그대로라서, 내용을 직접 입력하면 저장돼요.', true);
+    setAIStatus(el, '⚠️ AI 인식 실패: '+esc(err.message)+'<br>사진은 보존되니 직접 입력해 저장하세요.', true);
   }
 }
 async function aiParse(dataUrl){
@@ -719,13 +890,13 @@ function fillForm(j){
   if (Array.isArray(j.tags)) set('f_tags', j.tags.join(', '));
 }
 
-/* ---------- 설정 (AI 키) ---------- */
+/* ---------- AI 설정 ---------- */
 gearBtn.onclick = ()=>{
   const has = !!CFG.key;
   gearBtn.classList.toggle('has', has);
   openSheet(`
     <h2 class="sh">⚙️ AI 명함 인식 설정 (선택)</h2>
-    <p class="shd">기본은 <b style="color:var(--ok)">무료 내장 OCR</b>로 동작합니다(키 불필요). 여기에 Gemini 또는 OpenAI 키를 등록하면 한글·한자까지 더 정확한 AI 인식을 사용해요. 키는 <b>이 기기에만</b> 저장돼요.</p>
+    <p class="shd">기본은 <b style="color:var(--acc)">무료 내장 OCR</b>로 동작합니다(키 불필요). Gemini 또는 OpenAI 키를 등록하면 한글·한자까지 더 정확한 AI 인식을 지원해요. 키는 <b>이 기기에만</b> 저장돼요.</p>
     <div class="setrow"><label>AI 제공사</label>
       <select id="s_provider">
         <option value="gemini" ${CFG.provider==='gemini'?'selected':''}>Google Gemini (Gemini 1.5 Flash)</option>
@@ -740,9 +911,9 @@ gearBtn.onclick = ()=>{
     </div>
     <div class="note">
       <b>키 발급 안내</b><br>
-      · Gemini: <b>aistudio.google.com/apikey</b> (무료 할당량 있음) — 발급 후 위에 붙여넣기<br>
-      · OpenAI: <b>platform.openai.com/api-keys</b> (유료 크레딧 사용)<br>
-      · 키는 GitHub에 올라가지 않고 이 브라우저(localStorage)에만 저장됩니다.
+      · Gemini: <b>aistudio.google.com/apikey</b> (무료 할당량 있음)<br>
+      · OpenAI: <b>platform.openai.com/api-keys</b> (유료 크레딧)<br>
+      · 키는 GitHub에 올라가지 않고 이 기기(localStorage)에만 안전하게 보관됩니다.
     </div>
     <div class="d-actions" style="margin-top:18px">
       <button class="dbtn" id="s_clear">키 지우기</button>
@@ -760,7 +931,7 @@ gearBtn.onclick = ()=>{
     localStorage.setItem(LS_CFG, JSON.stringify(CFG));
     gearBtn.classList.toggle('has', !!CFG.key);
     closeSheet();
-    toastMsg(CFG.key ? 'AI 설정을 저장했어요 — 이제 사진만 찍으면 자동 인식돼요' : '설정을 저장했어요');
+    toastMsg(CFG.key ? 'AI 설정을 저장했어요' : '설정을 저장했어요');
   };
   document.getElementById('s_clear').onclick = ()=>{
     CFG.key=''; localStorage.setItem(LS_CFG, JSON.stringify(CFG));
@@ -771,7 +942,7 @@ gearBtn.onclick = ()=>{
 };
 gearBtn.classList.toggle('has', !!CFG.key);
 
-/* ---------- search ---------- */
+/* ---------- Search ---------- */
 const search = document.getElementById('search');
 const clearBtn = document.getElementById('clearBtn');
 search.addEventListener('input', ()=>{
@@ -785,6 +956,8 @@ if ('serviceWorker' in navigator) {
   addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
 
+// Initial state: Start locked (clean luxury front door)
+setVaultOpen(false);
 load();
 </script>
 </body>
