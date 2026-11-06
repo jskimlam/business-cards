@@ -6,9 +6,13 @@
 
 ## 기능
 
+- 📷 **카메라 촬영 추가** — 하단 [명함 촬영 / 추가] 버튼으로 바로 촬영·앨범 선택, 1200px WebP ~100KB대 자동 압축
+- 🔍 **무료 OCR 내장** — API 키 없이 Tesseract.js(한글+영문)로 전화·이메일·팩스·주소를 자동 추출해 입력창에 채워 줌
+- 🤖 **AI 인식 (선택)** — ⚙️ 설정에서 Gemini 또는 OpenAI API 키를 등록하면 이름·직함·회사까지 자동 인식 (키는 이 기기에만 저장)
+- 💾 **즉시 저장** — 촬영해 추가한 명함은 이 기기(localStorage)에 저장되고 목록에 즉시 반영. 수정·삭제 지원
 - 🔍 **검색** — 이름·한자·회사·직함·이메일·전화번호·태그 통합 검색
 - 🏷️ **필터 & 정렬** — 태그(국내/일본 등)로 걸러 보기, 이름순·회사순·최근순 정렬
-- 📇 **상세 보기** — 명함 스캔 이미지(탭하면 원본 크게), 연락처 목록
+- 📇 **상세 보기** — 명함 이미지(스캔본은 탭하면 원본), 연락처 목록
 - 📞 **원클릭 액션** — `tel:` 전화 걸기, `mailto:` 메일 보내기
 - 💾 **vCard(.vcf) 저장** — 버튼 한 번으로 연락처 파일 다운로드 → 주소록에 저장
 - 📱 **PWA** — manifest + service worker 탑재, 한 번 연 후 오프라인에서도 열림
@@ -61,13 +65,25 @@ git add data/cards.json images/ && git commit -m "명함 추가: 김민수" && g
 
 푸시 후 1~2분 안에 사이트에 반영됩니다.
 
+### 📷 촬영해서 추가하는 방법 (앱 안에서)
+
+앱 하단의 **[📷 명함 촬영 / 추가]** 버튼 → 카메라 촬영 또는 앨범 선택만 하면 됩니다.
+촬영한 명함은 이 기기에 바로 저장되고, 이 파일을 고칠 필요 없습니다. 리포지토리에 영구 보관하고 싶은 명함만 위 JSON 방식으로 추가하면 됩니다.
+
 ## 구조
 
 ```
-├── index.html        # 앱 본체 (단일 페이지, 외부 라이브러리 없음)
+├── index.html        # 앱 본체 (단일 페이지, Tesseract.js OCR만 CDN)
 ├── manifest.json     # PWA 설치 정보
 ├── sw.js             # 서비스 워커 (오프라인 캐시)
 ├── data/cards.json   # 명함 데이터 ← 여기에 추가
 ├── images/           # 명함 스캔본 (webp/jpg)
 └── icons/            # 앱 아이콘
 ```
+
+## GitHub Pages 켜기 (처음 한 번)
+
+1. 리포지토리에서 **Settings → Pages** (또는 https://github.com/jskimlam/business-cards/settings/pages )
+2. Build and deployment → Source: **Deploy from a branch**
+3. Branch: **main**, Folder: **/(root)** → **Save**
+4. 1~2분 후 https://jskimlam.github.io/business-cards/ 접속

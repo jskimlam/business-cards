@@ -1,5 +1,5 @@
 /* 명함 갈피 service worker — app shell + images cache-first */
-const CACHE = 'cards-cache-v1';
+const CACHE = 'cards-cache-v2';
 const ASSETS = [
   './',
   './index.html',
