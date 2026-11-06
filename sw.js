@@ -1,5 +1,5 @@
-/* 명함 갈피 service worker — app shell + images cache-first */
-const CACHE = 'cards-cache-v2';
+/* THE EXECUTIVE VAULT service worker — network-first for HTML, cache-first for static assets */
+const CACHE = 'cards-cache-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -29,18 +29,31 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
+  // HTML 문서는 네트워크 우선 (업데이트 즉시 반영, 오프라인 시 캐시 사용)
+  if (req.mode === 'navigate' || req.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // 기타 정적 파일(이미지, 아이콘, 폰트 등)은 캐시 우선
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => {
       if (hit) return hit;
-      return fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('./index.html'));
+      return fetch(req).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
     })
   );
 });
