@@ -855,6 +855,47 @@ async function runAI(dataUrl, el){
     }
   }
 }
+let CACHED_GEMINI_MODEL = null;
+async function resolveGeminiModel(key){
+  if (CFG.model && CFG.model.trim()) return CFG.model.trim();
+  if (CACHED_GEMINI_MODEL) return CACHED_GEMINI_MODEL;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+    if (res.ok){
+      const data = await res.json();
+      const available = (data.models || [])
+        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''));
+      const preference = [
+        'gemini-3.5-flash',
+        'gemini-3.1-flash-lite',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3-flash-preview',
+        'gemini-3.1-flash-lite-preview'
+      ];
+      for (const pref of preference){
+        if (available.includes(pref)){
+          CACHED_GEMINI_MODEL = pref;
+          return pref;
+        }
+      }
+      const anyFlash = available.find(m => m.includes('flash') && !m.includes('image') && !m.includes('tts') && !m.includes('thinking'));
+      if (anyFlash){
+        CACHED_GEMINI_MODEL = anyFlash;
+        return anyFlash;
+      }
+      if (available.length > 0){
+        CACHED_GEMINI_MODEL = available[0];
+        return available[0];
+      }
+    }
+  } catch(e){
+    console.warn('ListModels query failed, falling back to gemini-3.5-flash', e);
+  }
+  return 'gemini-3.5-flash';
+}
+
 async function aiParse(dataUrl){
   if (CFG.provider === 'openai'){
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -873,18 +914,20 @@ async function aiParse(dataUrl){
     const j = await res.json();
     return JSON.parse(stripFences(j.choices[0].message.content));
   } else {
-    // Gemini API 호출 (초고속 gemini-2.0-flash 및 OpenAI 호환 엔드포인트 자동 폴백)
+    // Gemini API 호출 (키가 지원하는 최신 3.x/Flash 모델 자동 감지 및 초고속 실행)
     const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/);
     const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const b64Data = dataUrl.split(',')[1];
 
+    const activeModel = await resolveGeminiModel(CFG.key);
+
     const attempts = [
-      // 1) 초고속 gemini-2.0-flash (생각 지연 없음, 1초 응답)
+      // 1) 감지된 키 전용 최신 모델 (gemini-3.5-flash / 3.1-flash-lite 등)
       async () => {
         const ctrl = new AbortController();
-        const tId = setTimeout(() => ctrl.abort(), 7000);
+        const tId = setTimeout(() => ctrl.abort(), 8000);
         try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(CFG.key)}`, {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(CFG.key)}`, {
             method: 'POST',
             signal: ctrl.signal,
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.key },
@@ -908,10 +951,39 @@ async function aiParse(dataUrl){
           return JSON.parse(stripFences(text));
         } finally { clearTimeout(tId); }
       },
-      // 2) Gemini 공식 OpenAI 호환 엔드포인트 (표준 CORS 지원)
+      // 2) gemini-flash-latest 시도
       async () => {
         const ctrl = new AbortController();
-        const tId = setTimeout(() => ctrl.abort(), 7000);
+        const tId = setTimeout(() => ctrl.abort(), 8000);
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(CFG.key)}`, {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.key },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: AI_PROMPT },
+                  { inline_data: { mime_type: mime, data: b64Data } }
+                ]
+              }],
+              generationConfig: { temperature: 0.1, response_mime_type: 'application/json' }
+            })
+          });
+          clearTimeout(tId);
+          if (!res.ok) {
+            const errTxt = await res.text();
+            throw new Error(`HTTP ${res.status} — ${errTxt.slice(0,120)}`);
+          }
+          const j = await res.json();
+          const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+          return JSON.parse(stripFences(text));
+        } finally { clearTimeout(tId); }
+      },
+      // 3) OpenAI 호환 엔드포인트
+      async () => {
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 8000);
         try {
           const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
             method: 'POST',
@@ -921,7 +993,7 @@ async function aiParse(dataUrl){
               'Authorization': 'Bearer ' + CFG.key
             },
             body: JSON.stringify({
-              model: 'gemini-2.0-flash',
+              model: activeModel,
               messages: [{
                 role: 'user',
                 content: [
@@ -939,35 +1011,6 @@ async function aiParse(dataUrl){
           }
           const j = await res.json();
           return JSON.parse(stripFences(j.choices[0].message.content));
-        } finally { clearTimeout(tId); }
-      },
-      // 3) gemini-2.5-flash-lite 폴백
-      async () => {
-        const ctrl = new AbortController();
-        const tId = setTimeout(() => ctrl.abort(), 7000);
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(CFG.key)}`, {
-            method: 'POST',
-            signal: ctrl.signal,
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.key },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: AI_PROMPT },
-                  { inline_data: { mime_type: mime, data: b64Data } }
-                ]
-              }],
-              generationConfig: { temperature: 0.1, response_mime_type: 'application/json' }
-            })
-          });
-          clearTimeout(tId);
-          if (!res.ok) {
-            const errTxt = await res.text();
-            throw new Error(`HTTP ${res.status} — ${errTxt.slice(0,120)}`);
-          }
-          const j = await res.json();
-          const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
-          return JSON.parse(stripFences(text));
         } finally { clearTimeout(tId); }
       }
     ];
