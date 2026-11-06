@@ -838,13 +838,21 @@ function setAIStatus(el, html, isErr){
   el.classList.add('show'); el.classList.toggle('err', !!isErr); el.innerHTML = html;
 }
 async function runAI(dataUrl, el){
-  setAIStatus(el, '<span class="spin"></span>AI가 명함을 읽고 있어요… (몇 초 소요)');
+  setAIStatus(el, '<span class="spin"></span>AI가 명함을 읽고 있어요… (1~2초 소요)');
   try {
     const j = await aiParse(dataUrl);
     fillForm(j);
     setAIStatus(el, '✅ AI 인식 완료 — 읽은 내용을 입력창에 채웠어요.');
   } catch(err){
-    setAIStatus(el, '⚠️ AI 인식 실패: '+esc(err.message)+'<br>사진은 보존되니 직접 입력해 저장하세요.', true);
+    console.warn('AI parse failed, fallback to local OCR:', err);
+    setAIStatus(el, '<span class="spin"></span>AI 연결 지연으로 내장 OCR로 전환해 읽는 중…');
+    try {
+      const ocrRes = await parseCardImage(dataUrl);
+      fillForm(ocrRes);
+      setAIStatus(el, '✅ 내장 OCR 인식 완료 — 읽은 내용을 채웠어요.');
+    } catch(ocrErr){
+      setAIStatus(el, '⚠️ AI 인식 실패: '+esc(err.message)+'<br>사진은 보존되니 직접 입력해 저장하세요.', true);
+    }
   }
 }
 async function aiParse(dataUrl){
@@ -865,56 +873,118 @@ async function aiParse(dataUrl){
     const j = await res.json();
     return JSON.parse(stripFences(j.choices[0].message.content));
   } else {
-    // Gemini API 호출 (2026년 최신 모델 자동 폴백 및 MIME 타입 자동 감지)
+    // Gemini API 호출 (초고속 gemini-2.0-flash 및 OpenAI 호환 엔드포인트 자동 폴백)
     const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/);
     const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const b64Data = dataUrl.split(',')[1];
 
-    // 구글 API 지원 모델 후보군 순차 시도 (gemini-2.5-flash -> gemini-2.0-flash -> gemini-flash-latest -> gemini-2.5-flash-lite)
-    const userModel = (CFG.model || '').trim();
-    const candidateModels = [
-      userModel,
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-flash-latest',
-      'gemini-2.5-flash-lite'
-    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const attempts = [
+      // 1) 초고속 gemini-2.0-flash (생각 지연 없음, 1초 응답)
+      async () => {
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 7000);
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(CFG.key)}`, {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.key },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: AI_PROMPT },
+                  { inline_data: { mime_type: mime, data: b64Data } }
+                ]
+              }],
+              generationConfig: { temperature: 0.1, response_mime_type: 'application/json' }
+            })
+          });
+          clearTimeout(tId);
+          if (!res.ok) {
+            const errTxt = await res.text();
+            throw new Error(`HTTP ${res.status} — ${errTxt.slice(0,120)}`);
+          }
+          const j = await res.json();
+          const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+          return JSON.parse(stripFences(text));
+        } finally { clearTimeout(tId); }
+      },
+      // 2) Gemini 공식 OpenAI 호환 엔드포인트 (표준 CORS 지원)
+      async () => {
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 7000);
+        try {
+          const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + CFG.key
+            },
+            body: JSON.stringify({
+              model: 'gemini-2.0-flash',
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: AI_PROMPT },
+                  { type: 'image_url', image_url: { url: dataUrl } }
+                ]
+              }],
+              response_format: { type: 'json_object' }
+            })
+          });
+          clearTimeout(tId);
+          if (!res.ok) {
+            const errTxt = await res.text();
+            throw new Error(`HTTP ${res.status} — ${errTxt.slice(0,120)}`);
+          }
+          const j = await res.json();
+          return JSON.parse(stripFences(j.choices[0].message.content));
+        } finally { clearTimeout(tId); }
+      },
+      // 3) gemini-2.5-flash-lite 폴백
+      async () => {
+        const ctrl = new AbortController();
+        const tId = setTimeout(() => ctrl.abort(), 7000);
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(CFG.key)}`, {
+            method: 'POST',
+            signal: ctrl.signal,
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': CFG.key },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: AI_PROMPT },
+                  { inline_data: { mime_type: mime, data: b64Data } }
+                ]
+              }],
+              generationConfig: { temperature: 0.1, response_mime_type: 'application/json' }
+            })
+          });
+          clearTimeout(tId);
+          if (!res.ok) {
+            const errTxt = await res.text();
+            throw new Error(`HTTP ${res.status} — ${errTxt.slice(0,120)}`);
+          }
+          const j = await res.json();
+          const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+          return JSON.parse(stripFences(text));
+        } finally { clearTimeout(tId); }
+      }
+    ];
 
     let lastError = null;
-    for (const model of candidateModels) {
+    for (const attempt of attempts) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(CFG.key)}`;
-        const res = await fetch(url, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            contents:[{parts:[{text:AI_PROMPT},{inline_data:{mime_type:mime,data:b64Data}}]}],
-            generationConfig:{temperature:0.1, response_mime_type:'application/json'}
-          })
-        });
-        if (res.ok){
-          const j = await res.json();
-          const text = j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
-          if (text) {
-            if (CFG.model !== model) {
-              CFG.model = model;
-              localStorage.setItem(LS_CFG, JSON.stringify(CFG));
-            }
-            return JSON.parse(stripFences(text));
-          }
-        } else {
-          const errText = await res.text();
-          lastError = new Error(`Gemini (${model}) ${res.status} — ${errText.slice(0,140)}`);
-          if (res.status === 404) continue;
-          throw lastError;
+        const res = await attempt();
+        if (res && (res.name || res.company || res.mobile || res.tel)) {
+          return res;
         }
-      } catch (err){
+      } catch (err) {
         lastError = err;
-        if (err.message && err.message.includes('404')) continue;
-        throw err;
+        continue;
       }
     }
-    throw lastError || new Error('Gemini API 모델 호출 실패');
+    throw lastError || new Error('Gemini API 응답 실패');
   }
 }
 function fillForm(j){
