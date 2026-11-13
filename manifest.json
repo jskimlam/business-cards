@@ -1,18 +1,33 @@
 {
   "name": "명함 갈피 — Business Cards",
   "short_name": "명함갈피",
-  "description": "김진수 님의 모바일 명함 관리 앱",
+  "description": "스캔 한 번으로 정리되는 나만의 명함첩",
   "lang": "ko",
   "dir": "ltr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f0d1e",
-  "theme_color": "#1e1b4b",
+  "background_color": "#F4F1EA",
+  "theme_color": "#F4F1EA",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
