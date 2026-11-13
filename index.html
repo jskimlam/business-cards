@@ -154,6 +154,12 @@ footer{margin-top:34px;text-align:center;font-size:11px;color:var(--faint);line-
 .sheet .panel{position:relative;width:100%;max-width:620px;max-height:94dvh;overflow-y:auto;overscroll-behavior:contain;background:var(--paper);border-radius:28px 28px 0 0;padding:10px 20px calc(28px + var(--safe-b));animation:up .28s var(--ease) both;box-shadow:0 -10px 40px rgba(26,29,38,.18)}
 @keyframes up{from{transform:translateY(60px);opacity:.4}to{transform:none;opacity:1}}
 .grab{width:38px;height:4px;border-radius:99px;background:var(--line2);margin:0 auto 18px}
+.sheet-bar{position:sticky;top:-10px;z-index:6;margin:-10px -20px 8px;padding:10px 20px 0;height:60px;background:var(--paper);touch-action:none;cursor:grab}
+.sheet-bar .grab{margin:0 auto 6px}
+.sheet-x{position:absolute;right:16px;top:16px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line2);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-card)}
+.sheet-x svg{width:16px;height:16px;stroke:var(--ink)}
+.sheet-x:active{background:var(--paper2)}
+.sheet .panel.dragging{animation:none;transition:none}
 h2.sh{font-family:var(--serif);font-size:22px;font-weight:900;letter-spacing:-.035em}
 p.shd{font-size:13px;color:var(--sub);line-height:1.6;margin:6px 0 16px}
 .btn{height:50px;border-radius:15px;border:1px solid var(--line2);background:var(--card);font-size:14.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;text-decoration:none;color:var(--ink);transition:transform .12s var(--ease)}
@@ -453,7 +459,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
-const WEB_VERSION = '2026.11.13-g';                                              // 화면(웹) 버전 — 반영 확인용
+const WEB_VERSION = '2026.11.13-h';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -496,8 +502,30 @@ function toastMsg(m, ms){                                                       
   toast.textContent = m; toast.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(()=>toast.classList.remove('show'), ms || 2600);
 }
-function openSheet(html){ panel.innerHTML = '<div class="grab"></div>'+html; panel.scrollTop = 0; sheet.classList.add('open'); document.body.style.overflow='hidden'; }
-function closeSheet(){ sheet.classList.remove('open'); document.body.style.overflow=''; }
+function openSheet(html){
+  panel.innerHTML = `<div class="sheet-bar" id="sheetBar"><div class="grab"></div><button class="sheet-x" id="sheetX" aria-label="닫기">${I('<path d="M6 6l12 12M18 6 6 18"/>', 2.4)}</button></div>` + html;
+  panel.scrollTop = 0; panel.style.transform = ''; sheet.classList.add('open'); document.body.style.overflow='hidden';
+  $('sheetX').onclick = closeSheet;                                              // 닫기 버튼
+  bindSheetDrag($('sheetBar'));                                                  // 손잡이를 아래로 밀어 닫기
+  if (!NATIVE && !history.state?.sheet) history.pushState({ sheet:1 }, '');      // 브라우저 뒤로가기로도 닫히게
+}
+function closeSheet(){
+  sheet.classList.remove('open'); document.body.style.overflow=''; panel.style.transform = '';
+  if (!NATIVE && history.state?.sheet){ SHEET_BACK = true; history.back(); }      // 쌓아 둔 기록 정리
+}
+function bindSheetDrag(bar){
+  let y0 = null, dy = 0;
+  bar.addEventListener('pointerdown', e=>{ if (e.target.closest('.sheet-x')) return; y0 = e.clientY; dy = 0; bar.setPointerCapture(e.pointerId); panel.classList.add('dragging'); });
+  bar.addEventListener('pointermove', e=>{ if (y0 === null) return; dy = Math.max(0, e.clientY - y0); panel.style.transform = `translateY(${dy}px)`; });
+  const end = ()=>{ if (y0 === null) return; y0 = null; panel.classList.remove('dragging');
+    if (dy > 90) closeSheet(); else panel.style.transform = ''; };
+  bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+}
+let SHEET_BACK = false;                                                           // 코드로 되돌린 기록인지
+addEventListener('popstate', ()=>{                                               // 브라우저 뒤로가기
+  if (SHEET_BACK){ SHEET_BACK = false; return; }
+  if (sheet.classList.contains('open')){ sheet.classList.remove('open'); document.body.style.overflow=''; }
+});
 $('dim').onclick = closeSheet;
 function showBusy(t){ $('busyTxt').textContent = t || '처리 중…'; $('busy').classList.add('open'); }
 function hideBusy(){ $('busy').classList.remove('open'); }
