@@ -430,7 +430,7 @@ p.shd{font-size:13px;color:var(--sub);line-height:1.6;margin:6px 0 16px}
   <div class="rv-tools" id="rvTools" style="display:none">
     <div class="seg" id="rvSeg"><button data-f="color">원본 컬러</button><button data-f="scan" class="on">스캔</button><button data-f="bw">흑백</button></div>
   </div>
-  <div class="rv-tip" id="rvTip">자동으로 맞춘 테두리가 어긋나면 점을 끌어 조정하세요</div>
+  <div class="rv-tip" id="rvTip">어긋나면 점을 끌어 조정하세요 · <button id="rvAuto" style="border:0;background:none;color:var(--seal);font-weight:800;font-size:12px;text-decoration:underline;cursor:pointer;font-family:inherit">자동 맞춤 다시</button></div>
   <div class="rv-actions">
     <button class="btn" id="rvRetake">다시 찍기</button>
     <button class="btn ink" id="rvNext">보정 적용</button>
@@ -769,7 +769,11 @@ window.__nativeScanDone = function(r){
     if (r && /전환/.test(r.error||'')) openScanner();                             // 스캐너 불가 → 앱 내 카메라
     return;
   }
-  openAddForm({ imageData:r.image, ai:true, ocr:{ text:r.text||'', lines:r.lines||[], engine:'기기 내 한글 OCR' } });
+  showBusy('테두리를 다듬는 중…');
+  tightenImage(r.image).then(img=>{                                              // 배경 띠 제거 + 비율 맞춤
+    hideBusy();
+    openAddForm({ imageData:img, ai:true, ocr:{ text:r.text||'', lines:r.lines||[], engine:'기기 내 한글 OCR' } });
+  });
 };
 
 /* =========================================================
@@ -930,7 +934,7 @@ async function captureFrame(){
     {x:g.x - sx, y:g.y - sy}, {x:g.x + g.w - sx, y:g.y - sy},
     {x:g.x + g.w - sx, y:g.y + g.h - sy}, {x:g.x - sx, y:g.y + g.h - sy}
   ];
-  const detected = detectCardQuad(cv);                                           // 테두리 자동 감지 시도
+  const detected = detectCardQuad(cv, true);                                     // 테두리 정밀 감지
   closeScanner();
   openReview(cv, detected || quad, 'camera');
 }
@@ -957,54 +961,260 @@ $('scOrient').onclick = ()=>{                                                   
 addEventListener('resize', ()=>{ if ($('scanner').classList.contains('open')) layoutGuide(); });
 
 /* =========================================================
-   I. 명함 테두리 자동 감지 (밝은 명함 vs 배경 대비 기반, 가벼운 방식)
+   I. 명함 테두리 정밀 감지 (흰색 판별 + 네 변 직선 맞춤 + 원본 해상도 보정)
    ========================================================= */
-function detectCardQuad(src){
+/**
+ * 명함 네 모서리 찾기
+ * 1) 축소 이미지에서 "밝고 색이 없는(흰색)" 정도로 명함 영역 분리 (실패 시 밝기만으로 재시도)
+ * 2) 가운데에서 가장 큰 덩어리 → 바깥 경계점 추출
+ * 3) 경계점을 네 변으로 나눠 직선 맞춤 → 직선 교점 = 모서리
+ * 4) (refine=true) 원본 해상도에서 경계선 위치를 다시 찾아 1~2px 수준으로 보정
+ * 반환: [좌상, 우상, 우하, 좌하] (원본 좌표) 또는 null
+ */
+function detectCardQuad(src, refine){
   try {
-    const S = 220, sc = S / Math.max(src.width, src.height);                     // 축소해서 계산
-    const w = Math.max(2, Math.round(src.width * sc)), h = Math.max(2, Math.round(src.height * sc));
+    const S = refine ? 480 : 240;                                                // 축소 크기 (실시간 분석은 작게)
+    const sc = Math.min(1, S / Math.max(src.width, src.height));
+    const w = Math.max(8, Math.round(src.width * sc)), h = Math.max(8, Math.round(src.height * sc));
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const ctx = c.getContext('2d', { willReadFrequently:true });
     ctx.drawImage(src, 0, 0, w, h);
-    const d = ctx.getImageData(0, 0, w, h).data;
-    const g = new Float32Array(w*h);
-    for (let i=0, j=0; i<w*h; i++, j+=4) g[i] = d[j]*0.299 + d[j+1]*0.587 + d[j+2]*0.114;
-    // 오츠(Otsu) 임계값으로 명함(밝은 영역)과 배경 분리
-    const hist = new Array(256).fill(0); for (let i=0;i<g.length;i++) hist[g[i]|0]++;
-    let total = g.length, sumAll = 0; for (let t=0;t<256;t++) sumAll += t*hist[t];
-    let sumB = 0, wB = 0, best = 0, thr = 128;
-    for (let t=0;t<256;t++){ wB += hist[t]; if (!wB) continue; const wF = total - wB; if (!wF) break; sumB += t*hist[t];
-      const mB = sumB/wB, mF = (sumAll-sumB)/wF, between = wB*wF*(mB-mF)*(mB-mF); if (between > best){ best = between; thr = t; } }
-    // 가운데에서 가장 큰 밝은 덩어리 찾기 (플러드필)
-    const mask = new Uint8Array(w*h); for (let i=0;i<g.length;i++) mask[i] = g[i] > thr ? 1 : 0;
-    const seen = new Uint8Array(w*h); let bestPts = null, bestCnt = 0;
-    const cx = w>>1, cy = h>>1, seeds = [[cx,cy],[cx-w/6|0,cy],[cx+w/6|0,cy],[cx,cy-h/6|0],[cx,cy+h/6|0]];
-    for (const [sx0, sy0] of seeds){
-      const s0 = sy0*w + sx0; if (!mask[s0] || seen[s0]) continue;
-      const stack = [s0]; seen[s0] = 1; const pts = [];
-      while (stack.length){ const p = stack.pop(); pts.push(p); const x = p % w, y = (p / w) | 0;
-        if (x>0 && mask[p-1] && !seen[p-1]){ seen[p-1]=1; stack.push(p-1); }
-        if (x<w-1 && mask[p+1] && !seen[p+1]){ seen[p+1]=1; stack.push(p+1); }
-        if (y>0 && mask[p-w] && !seen[p-w]){ seen[p-w]=1; stack.push(p-w); }
-        if (y<h-1 && mask[p+w] && !seen[p+w]){ seen[p+w]=1; stack.push(p+w); } }
-      if (pts.length > bestCnt){ bestCnt = pts.length; bestPts = pts; }
+    const d = ctx.getImageData(0, 0, w, h).data, n = w*h;
+    const white = new Float32Array(n), bright = new Float32Array(n);
+    for (let i=0, j=0; i<n; i++, j+=4){
+      const r = d[j], g = d[j+1], b = d[j+2];
+      const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+      const sat = mx ? (mx - mn) / mx : 0;                                        // 채도(0=무채색)
+      bright[i] = r*0.299 + g*0.587 + b*0.114;                                    // 밝기
+      white[i] = mx * (1 - Math.min(1, sat * 1.8));                               // 흰색 점수: 밝고 무채색일수록 큼
     }
-    if (!bestPts) return null;
-    const area = bestCnt / (w*h);
-    if (area < 0.25 || area > 0.97) return null;                                 // 너무 작거나 화면 전체면 실패
-    // 네 모서리: x+y 최소/최대, x−y 최소/최대 점
-    let tl, tr, br, bl, a=1e9, b=-1e9, cc=-1e9, dd=1e9;
-    for (const p of bestPts){ const x = p % w, y = (p / w) | 0;
-      const s = x + y, df = x - y;
-      if (s < a){ a = s; tl = {x,y}; } if (s > b){ b = s; br = {x,y}; }
-      if (df > cc){ cc = df; tr = {x,y}; } if (df < dd){ dd = df; bl = {x,y}; } }
-    const quad = [tl,tr,br,bl].map(p=>({ x:(p.x+0.5)/sc, y:(p.y+0.5)/sc }));
-    const qa = Math.abs(polyArea(quad)) / (src.width*src.height);                // 사각형 면적 검증
-    if (qa < 0.25 || qa > 0.98 || qa < area*0.75) return null;
+    let quad = quadFromScore(white, w, h) || quadFromScore(bright, w, h);        // 흰색 기준 → 실패 시 밝기 기준
+    if (!quad) return null;
+    quad = quad.map(p=>({ x:p.x / sc, y:p.y / sc }));                             // 원본 좌표로
+    if (refine) quad = refineQuadFullRes(src, quad) || quad;                     // 원본 해상도 미세 보정
+    if (!isGoodQuad(quad, src.width, src.height)) return null;
     return quad;
   } catch(e){ return null; }
 }
+
+/* 점수 맵 → 명함 사각형: 임계값을 단계적으로 올려 가며 시도 (흰 책상 위 흰 명함 대응) */
+function quadFromScore(score, w, h){
+  let lo = -1;
+  for (let k=0; k<3; k++){
+    const thr = otsu(score, lo);                                                 // 이전 임계값보다 밝은 쪽에서 다시 나누기
+    if (thr <= lo) break;
+    const q = quadAtThreshold(score, w, h, thr);
+    if (q) return q;
+    lo = thr;
+  }
+  return null;
+}
+function quadAtThreshold(score, w, h, thr){
+  const mask = new Uint8Array(w*h);
+  for (let i=0;i<mask.length;i++) mask[i] = score[i] > thr ? 1 : 0;
+  // 가운데 부근에서 가장 큰 덩어리 (플러드필)
+  const seen = new Uint8Array(w*h); let comp = null, compN = 0;
+  const cx = w>>1, cy = h>>1;
+  const seeds = [[cx,cy],[cx-(w/6|0),cy],[cx+(w/6|0),cy],[cx,cy-(h/6|0)],[cx,cy+(h/6|0)],[cx-(w/4|0),cy-(h/5|0)],[cx+(w/4|0),cy+(h/5|0)]];
+  for (const [sx, sy] of seeds){
+    const s0 = sy*w + sx; if (!mask[s0] || seen[s0]) continue;
+    const lab = new Uint8Array(w*h), stack = [s0]; seen[s0] = 1; lab[s0] = 1; let cnt = 0;
+    while (stack.length){
+      const p = stack.pop(); cnt++; const x = p % w, y = (p / w) | 0;
+      if (x>0 && mask[p-1] && !seen[p-1]){ seen[p-1]=1; lab[p-1]=1; stack.push(p-1); }
+      if (x<w-1 && mask[p+1] && !seen[p+1]){ seen[p+1]=1; lab[p+1]=1; stack.push(p+1); }
+      if (y>0 && mask[p-w] && !seen[p-w]){ seen[p-w]=1; lab[p-w]=1; stack.push(p-w); }
+      if (y<h-1 && mask[p+w] && !seen[p+w]){ seen[p+w]=1; lab[p+w]=1; stack.push(p+w); }
+    }
+    if (cnt > compN){ compN = cnt; comp = lab; }
+  }
+  if (!comp) return null;
+  const area = compN / (w*h);
+  if (area < 0.12 || area > 0.985) return null;                                  // 너무 작거나 화면 전체면 실패
+
+  // 바깥 경계점: 각 행의 좌·우 끝, 각 열의 위·아래 끝 (글자 구멍은 무시됨)
+  const pts = [];
+  for (let y=0;y<h;y++){ let l=-1, r=-1; for (let x=0;x<w;x++) if (comp[y*w+x]){ if (l<0) l=x; r=x; } if (l>=0){ pts.push({x:l,y,edge:l===0}); pts.push({x:r,y,edge:r===w-1}); } }
+  for (let x=0;x<w;x++){ let t=-1, b=-1; for (let y=0;y<h;y++) if (comp[y*w+x]){ if (t<0) t=y; b=y; } if (t>=0){ pts.push({x,y:t,edge:t===0}); pts.push({x,y:b,edge:b===h-1}); } }
+  const edgeFrac = pts.filter(p=>p.edge).length / pts.length;                   // 사진 테두리에 닿은 비율
+  if (edgeFrac > 0.3) return null;                                               // 배경까지 한 덩어리 → 더 밝은 임계값으로
+  // 대략적인 모서리: x+y, x−y 극값
+  let tl, tr, br, bl, a=1e9, b2=-1e9, c2=-1e9, d2=1e9;
+  for (const p of pts){ const s = p.x + p.y, df = p.x - p.y;
+    if (s < a){ a = s; tl = p; } if (s > b2){ b2 = s; br = p; }
+    if (df > c2){ c2 = df; tr = p; } if (df < d2){ d2 = df; bl = p; } }
+  let quad = [tl,tr,br,bl].map(p=>({x:p.x+0.5, y:p.y+0.5}));
+  // 네 변 직선 맞춤 (둥근 모서리 영향을 줄이려 변 가운데 70%만 사용)
+  const diag = Math.hypot(w, h), tol = diag * 0.035;
+  const lines = [];
+  for (let k=0;k<4;k++){
+    const A = quad[k], B = quad[(k+1)%4];
+    const vx = B.x - A.x, vy = B.y - A.y, L = Math.hypot(vx, vy) || 1;
+    const ux = vx / L, uy = vy / L;
+    const sel = pts.filter(p=>{
+      if (p.edge) return false;                                                  // 사진 가장자리에 닿은 점 제외
+      const t = ((p.x - A.x)*ux + (p.y - A.y)*uy) / L;                            // 변 위 위치(0~1)
+      const dist = Math.abs((p.x - A.x)*uy - (p.y - A.y)*ux);                     // 변에서 떨어진 거리
+      return t > 0.15 && t < 0.85 && dist < tol;
+    });
+    lines.push(sel.length >= 6 ? fitLine(sel) : null);
+  }
+  const refined = [];
+  for (let k=0;k<4;k++){                                                         // 모서리 k = 변(k-1)과 변 k의 교점
+    const L1 = lines[(k+3)%4], L2 = lines[k];
+    const p = (L1 && L2) ? intersect(L1, L2) : null;
+    refined.push(p && Math.hypot(p.x - quad[k].x, p.y - quad[k].y) < diag*0.12 ? p : quad[k]);
+  }
+  quad = refined;
+  const qa = Math.abs(polyArea(quad)) / (w*h);
+  if (qa < area * 0.8 || qa > area * 1.25) return null;                          // 덩어리와 사각형이 안 맞으면 실패
+  return quad;
+}
+
+/* 원본 해상도에서 각 변을 경계 기울기 최대 지점으로 다시 맞춤 */
+function refineQuadFullRes(src, quad){
+  const W = src.width, H = src.height;
+  const g = src.getContext ? src.getContext('2d', { willReadFrequently:true }) : null;
+  if (!g) return null;
+  const data = g.getImageData(0, 0, W, H).data;
+  const lum = (x, y)=>{ x = Math.max(0, Math.min(W-1, x|0)); y = Math.max(0, Math.min(H-1, y|0)); const i = (y*W + x)*4; return data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114; };
+  const cx = quad.reduce((s,p)=>s+p.x,0)/4, cy = quad.reduce((s,p)=>s+p.y,0)/4;   // 사각형 중심
+  const R = Math.max(6, Math.round(Math.max(W, H) * 0.012));                     // 탐색 반경(px)
+  const lines = [];
+  for (let k=0;k<4;k++){
+    const A = quad[k], B = quad[(k+1)%4];
+    const vx = B.x - A.x, vy = B.y - A.y, L = Math.hypot(vx, vy) || 1;
+    let nx = vy / L, ny = -vx / L;                                               // 변의 법선
+    const mx = (A.x + B.x)/2, my = (A.y + B.y)/2;
+    if ((cx - mx)*nx + (cy - my)*ny < 0){ nx = -nx; ny = -ny; }                  // 법선이 안쪽(명함)을 향하도록
+    const pts = [];
+    for (let s=1; s<=24; s++){
+      const t = 0.12 + 0.76 * s / 25;                                            // 변 가운데 부분만
+      const px = A.x + vx*t, py = A.y + vy*t;
+      let best = 0, bestOff = null;
+      for (let o=-R; o<=R; o++){                                                 // 바깥(어두움) → 안쪽(밝음) 변화가 가장 큰 곳
+        const inner = lum(px + nx*(o+2), py + ny*(o+2)) + lum(px + nx*(o+3), py + ny*(o+3));
+        const outer = lum(px + nx*(o-2), py + ny*(o-2)) + lum(px + nx*(o-3), py + ny*(o-3));
+        const grad = inner - outer;
+        if (grad > best){ best = grad; bestOff = o; }
+      }
+      if (bestOff !== null && best > 30) pts.push({ x:px + nx*bestOff, y:py + ny*bestOff });
+    }
+    lines.push(pts.length >= 8 ? fitLine(pts) : null);
+  }
+  const out = [];
+  for (let k=0;k<4;k++){
+    const L1 = lines[(k+3)%4], L2 = lines[k];
+    const p = (L1 && L2) ? intersect(L1, L2) : null;
+    out.push(p && Math.hypot(p.x - quad[k].x, p.y - quad[k].y) < R*3 ? p : quad[k]);
+  }
+  return out;
+}
+
+/* 점들에 직선 맞춤 (주성분 방향) → {px,py,dx,dy} */
+function fitLine(pts){
+  let sx=0, sy=0; for (const p of pts){ sx+=p.x; sy+=p.y; }
+  const mx = sx/pts.length, my = sy/pts.length;
+  let xx=0, xy=0, yy=0; for (const p of pts){ const dx=p.x-mx, dy=p.y-my; xx+=dx*dx; xy+=dx*dy; yy+=dy*dy; }
+  const ang = 0.5 * Math.atan2(2*xy, xx - yy);
+  return { px:mx, py:my, dx:Math.cos(ang), dy:Math.sin(ang) };
+}
+/* 두 직선의 교점 */
+function intersect(a, b){
+  const den = a.dx*b.dy - a.dy*b.dx; if (Math.abs(den) < 1e-6) return null;
+  const t = ((b.px - a.px)*b.dy - (b.py - a.py)*b.dx) / den;
+  return { x:a.px + a.dx*t, y:a.py + a.dy*t };
+}
+/* 볼록하고 각도가 자연스러운 사각형인지 검사 */
+function isGoodQuad(q, W, H){
+  const qa = Math.abs(polyArea(q)) / (W*H);
+  if (qa < 0.1 || qa > 0.995) return false;
+  let sign = 0;
+  for (let i=0;i<4;i++){
+    const a = q[i], b = q[(i+1)%4], c = q[(i+2)%4];
+    const cr = (b.x-a.x)*(c.y-b.y) - (b.y-a.y)*(c.x-b.x);
+    if (!sign) sign = Math.sign(cr); else if (Math.sign(cr) !== sign) return false; // 볼록성
+    const v1x = a.x-b.x, v1y = a.y-b.y, v2x = c.x-b.x, v2y = c.y-b.y;
+    const cos = (v1x*v2x + v1y*v2y) / (Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y) || 1);
+    if (Math.abs(cos) > 0.6) return false;                                       // 모서리 각도 53~127° 범위
+  }
+  return true;
+}
+function otsu(arr, above){                                                       // 오츠 자동 임계값 (above보다 큰 값만 대상)
+  const lo = above == null ? -1 : above;
+  const hist = new Float64Array(256); let total = 0;
+  for (let i=0;i<arr.length;i++){ const v = arr[i]; if (v > lo){ hist[Math.max(0, Math.min(255, v|0))]++; total++; } }
+  if (!total) return lo;
+  let sumAll = 0; for (let t=0;t<256;t++) sumAll += t*hist[t];
+  let sumB = 0, wB = 0, best = 0, thr = 128;
+  for (let t=0;t<256;t++){ wB += hist[t]; if (!wB) continue; const wF = total - wB; if (!wF) break; sumB += t*hist[t];
+    const mB = sumB/wB, mF = (sumAll-sumB)/wF, bt = wB*wF*(mB-mF)*(mB-mF); if (bt > best){ best = bt; thr = t; } }
+  return thr;
+}
 function polyArea(q){ let s = 0; for (let i=0;i<q.length;i++){ const a=q[i], b=q[(i+1)%q.length]; s += a.x*b.y - b.x*a.y; } return s/2; }
+
+/* 보정 후 가장자리에 남은 배경 띠 자르기 (흰 명함 기준) */
+function trimEdges(cv){
+  const W = cv.width, H = cv.height;
+  const d = cv.getContext('2d', { willReadFrequently:true }).getImageData(0, 0, W, H).data;
+  const isPaper = new Uint8Array(W*H); let sumV = 0, cnt = 0;
+  const cx0 = W*0.3|0, cx1 = W*0.7|0, cy0 = H*0.3|0, cy1 = H*0.7|0;
+  for (let y=cy0;y<cy1;y+=3) for (let x=cx0;x<cx1;x+=3){ const i=(y*W+x)*4; sumV += Math.max(d[i],d[i+1],d[i+2]); cnt++; }
+  const paperV = sumV / cnt;                                                     // 명함 바탕 밝기 추정
+  if (paperV < 120) return cv;                                                   // 어두운 명함은 건너뜀
+  for (let i=0, j=0; i<W*H; i++, j+=4){
+    const mx = Math.max(d[j],d[j+1],d[j+2]), mn = Math.min(d[j],d[j+1],d[j+2]);
+    isPaper[i] = (mx > paperV*0.72 && (mx - mn) < 60) ? 1 : 0;                   // 바탕과 비슷한 밝은 무채색
+  }
+  const rowFrac = y=>{ let s=0; for (let x=0;x<W;x+=2) s+=isPaper[y*W+x]; return s/(W/2); };
+  const colFrac = x=>{ let s=0; for (let y=0;y<H;y+=2) s+=isPaper[y*W+x]; return s/(H/2); };
+  const maxY = H*0.06|0, maxX = W*0.06|0;                                        // 최대 6%까지만 자르기
+  let top=0, bot=H-1, lef=0, rig=W-1;
+  while (top < maxY && rowFrac(top) < 0.55) top++;
+  while (H-1-bot < maxY && rowFrac(bot) < 0.55) bot--;
+  while (lef < maxX && colFrac(lef) < 0.55) lef++;
+  while (W-1-rig < maxX && colFrac(rig) < 0.55) rig--;
+  if (top===0 && lef===0 && bot===H-1 && rig===W-1) return cv;
+  const out = document.createElement('canvas'); out.width = rig-lef+1; out.height = bot-top+1;
+  out.getContext('2d').drawImage(cv, lef, top, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
+}
+
+/* 표준 명함 비율에 가까우면 그 비율로 맞춤 (원근 때문에 찌그러진 모양 보정) */
+const CARD_RATIOS = [1.8, 1.75, 1.655, 1.636, 1.586];                            // 90×50, 3.5×2in, 91×55, 90×55, 85.6×54
+function snapAspect(cv){
+  const land = cv.width >= cv.height, r = land ? cv.width/cv.height : cv.height/cv.width;
+  let best = null, bd = 1;
+  for (const s of CARD_RATIOS){ const dd = Math.abs(r - s) / s; if (dd < bd){ bd = dd; best = s; } }
+  if (!best || bd > 0.06 || bd < 0.004) return cv;                               // 6% 이상 차이나면 손대지 않음
+  const out = document.createElement('canvas');
+  if (land){ out.width = cv.width; out.height = Math.round(cv.width / best); }
+  else { out.height = cv.height; out.width = Math.round(cv.height / best); }
+  const g = out.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(cv, 0, 0, out.width, out.height);
+  return out;
+}
+
+/* 반듯하게 편 결과 마무리: 가장자리 다듬기 + 비율 맞춤 */
+function finishWarp(cv){ return snapAspect(trimEdges(cv)); }
+
+/* 이미 잘린 이미지(구글 스캐너 결과 등)를 한 번 더 정밀하게 맞춤 */
+async function tightenImage(dataUrl){
+  try {
+    const img = await new Promise((ok, no)=>{ const im = new Image(); im.onload = ()=>ok(im); im.onerror = no; im.src = dataUrl; });
+    const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    cv.getContext('2d').drawImage(img, 0, 0);
+    let out = cv;
+    const q = detectCardQuad(cv, true);
+    if (q){
+      const ratio = Math.abs(polyArea(q)) / (cv.width*cv.height);
+      if (ratio > 0.5 && ratio < 0.97) out = warpPerspective(cv, q, Math.max(cv.width, cv.height)); // 배경이 꽤 남았으면 다시 펴기
+    }
+    out = finishWarp(out);
+    if (out === cv) return dataUrl;                                              // 바뀐 게 없으면 원본
+    return out.toDataURL('image/jpeg', 0.9);
+  } catch(e){ return dataUrl; }
+}
 
 /* =========================================================
    J. 보정 화면 (모서리 조정 → 원근 보정 → 필터)
@@ -1022,7 +1232,7 @@ async function openReviewFromFile(file){
     cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s);
     cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
     hideBusy();
-    const auto = detectCardQuad(cv);                                             // 자동 테두리
+    const auto = detectCardQuad(cv, true);                                       // 자동 테두리(정밀)
     const ix = cv.width * 0.06, iy = cv.height * 0.06;                           // 실패 시 6% 안쪽
     const quad = auto || [{x:ix,y:iy},{x:cv.width-ix,y:iy},{x:cv.width-ix,y:cv.height-iy},{x:ix,y:cv.height-iy}];
     openReview(cv, quad, 'album');
@@ -1091,6 +1301,11 @@ function rotateSrc(){                                                           
   RV.quad = [RV.quad[3], RV.quad[0], RV.quad[1], RV.quad[2]];                    // 좌상단부터 다시 정렬
   RV.src = c;
 }
+$('rvAuto').onclick = ()=>{                                                       // 테두리 다시 자동 감지
+  const q = detectCardQuad(RV.src, true);
+  if (q){ RV.quad = q; placeHandles(); toastMsg('명함 테두리에 맞췄어요', 1400); }
+  else toastMsg('테두리를 찾지 못했어요. 점을 직접 끌어 맞춰 주세요', 2600);
+};
 $('rvRotate').onclick = ()=>{
   if (RV.step === 1){ rotateSrc(); showStep1(); }
   else { const w = RV.warped, c = document.createElement('canvas'); c.width = w.height; c.height = w.width;
@@ -1101,7 +1316,7 @@ $('rvRetake').onclick = ()=>{ const from = RV.from; closeReview(); if (from === 
 $('rvNext').onclick = ()=>{
   if (RV.step === 1){
     showBusy('반듯하게 펴는 중…');
-    setTimeout(()=>{ try { RV.warped = warpPerspective(RV.src, RV.quad, 1800); hideBusy(); showStep2(); }
+    setTimeout(()=>{ try { RV.warped = finishWarp(warpPerspective(RV.src, RV.quad, 1800)); hideBusy(); showStep2(); }
                      catch(e){ hideBusy(); toastMsg('보정 실패: ' + e.message); } }, 30);
   } else finishReview();
 };
@@ -1454,7 +1669,7 @@ const RX = {
   title:/(대표이사|대표|회장|부회장|사장|부사장|전무이사|전무|상무이사|상무보|상무|이사대우|이사|실장|본부장|센터장|부문장|사업부장|공장장|소장|지점장|지사장|부장|차장|과장|대리|주임|사원|팀장|파트장|그룹장|수석연구원|책임연구원|선임연구원|연구원|책임|선임|수석|매니저|프로|위원|고문|교수|변호사|회계사|세무사|CEO|CTO|CFO|COO|President|Vice President|VP|Director|General Manager|Manager|Engineer|Specialist|Executive|Chairman|Partner|Consultant|Analyst|Officer|Head of|Senior|Associate|Representative|社長|副社長|専務|常務|取締役|部長|次長|課長|係長|主任|室長|代表|担当|经理|总经理|董事长|主管)/i,
   company:/(㈜|\(주\)|\(유\)|주식회사|유한회사|유한책임회사|그룹|코퍼레이션|케미칼|케미컬|화학|석유|정유|산업|전자|건설|무역|상사|물산|홀딩스|해운|물류|로지스틱스|은행|증권|보험|Co\.?,?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|Company|Group|Holdings|LLC|GmbH|S\.A\.|PLC|Pte\.?|株式会社|有限会社|\(株\)|集团|有限公司)/i,
   dept:/(본부|사업부|사업팀|부문|팀|실|센터|연구소|지점|지사|사무소|공장|Division|Dept\.?|Department|Team|Office|Unit|Group|事業部|部|課|室)/i,
-  addr:/(특별시|광역시|특별자치|[가-힣]{1,4}도\s|[가-힣]{1,5}[시군구]\s|[가-힣\d]{1,8}(로|길|대로)\s*\d|[가-힣]{1,4}동\s*\d|번길|빌딩|타워|센터\s?\d|\d+층|Street|St\.|Road|Rd\.|Avenue|Ave\.?|Blvd|Building|Bldg\.?|Tower|Floor|\d+F\b|Suite|Seoul|Busan|Ulsan|Yeosu|Daesan|Incheon|Tokyo|Osaka|Shanghai|Singapore|Korea|Japan|China|都|道|府|県|区|丁目|番地|〒)/i
+  addr:/(특별시|광역시|특별자치|[가-힣]{1,4}도\s|[가-힣]{1,5}[시군구]\s|[가-힣\d]{1,8}(로|길|대로)\s*\d|[가-힣]{1,4}동\s*\d|번길|빌딩|타워|센터\s?\d|\d+층|Street|St\.|Road|Rd\.|Avenue|Ave\.?|Blvd|Pkwy|Parkway|Drive|Dr\.|Lane|Highway|Hwy|Plaza|USA|U\.S\.A|\b[A-Z]{2}\s\d{5}\b|Germany|Taiwan|Hong Kong|Thailand|Vietnam|India|Building|Bldg\.?|Tower|Floor|\d+F\b|Suite|Seoul|Busan|Ulsan|Yeosu|Daesan|Incheon|Tokyo|Osaka|Shanghai|Singapore|Korea|Japan|China|都|道|府|県|区|丁目|番地|〒)/i
 };
 function extractFields(text, lines){
   const out = {};
@@ -1474,15 +1689,18 @@ function extractFields(text, lines){
 
   // 3) 전화 / 휴대폰 / 팩스 (한 줄에 여러 번호와 라벨 처리)
   const phones = {mobile:[], tel:[], fax:[]}, seen = new Set();
-  const numRe = /(\+?\(?\d{1,4}\)?[\s.\-–—]?)?\d{1,4}[\s.\-–—)]{0,2}\d{2,4}[\s.\-–—]\d{3,4}(?:[\s.\-–—]\d{1,4})?/g;
+  const numRe = /\+?\(?\d[\d\s().\-–—]{6,}\d/g;                                 // 국가번호·(0) 포함 번호 덩어리
   for (const l of L){
     let m; numRe.lastIndex = 0;
     while ((m = numRe.exec(l.t))){
-      const raw = m[0].trim(), digits = raw.replace(/\D/g,'');
-      if (digits.length < 8 || digits.length > 14) continue;                     // 우편번호·연도 제외
+      const raw = m[0].trim();
+      if (/^\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}$/.test(raw)) continue;               // 날짜 제외
+      let num = raw.replace(/[–—]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s{2,}/g,' ');
+      if (/^\+/.test(num)) num = num.replace(/\(\s*0\s*\)\s*-?\s*/,'').replace(/-{2,}/g,'-'); // +81-(0)3 → +81-3
+      const digits = num.replace(/\D/g,'');
+      if (digits.length < 8 || digits.length > 14) continue;                     // 우편번호·여러 번호 붙음 제외
       if (seen.has(digits)) continue; seen.add(digits);
       const label = l.t.slice(Math.max(0, m.index - 12), m.index);               // 번호 앞 라벨
-      const num = raw.replace(/[–—]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s{2,}/g,' ');
       const d2 = digits.replace(/^0{0,2}82/, '0').replace(/^00/, '');            // +82 → 0 기준 판단
       if (/(fax|팩스|F\s*[:.)]?\s*$|传真|ＦＡＸ)/i.test(label)) phones.fax.push(num);
       else if (/(mobile|mob|cell|휴대|핸드폰|H\.?\s?P|M\s*[:.)]?\s*$|C\s*[:.)]?\s*$|携帯|手机)/i.test(label) || /^01[016789]/.test(d2) || /^(\+?81)?0?[789]0\d{8}$/.test(digits)) phones.mobile.push(num);
@@ -1502,9 +1720,14 @@ function extractFields(text, lines){
     for (let k=1;k<addrIdx.length;k++){ if (addrIdx[k] === group[group.length-1] + 1 && group.length < 3) group.push(addrIdx[k]); }
     let addr = group.map(i=>L[i].t).join(' ');
     group.forEach(i=>used.add(L[i]));
-    const zip = addr.match(/〒\s*\d{3}-?\d{4}|\(\s*\d{5}\s*\)|(?:^|\s)\d{5}(?=\s|$)/);
-    if (zip){ out.addressDetail = zip[0].trim().replace(/[()]/g,''); addr = addr.replace(zip[0], ' '); }
-    out.address = addr.replace(/^(주소|address|addr\.?|add\.?)\s*[:.]?\s*/i,'').replace(/\s{2,}/g,' ').trim();
+    const ZIPS = [/〒\s*\d{3}-?\d{4}/, /\(\s*\d{5}\s*\)/, /(?<![\d\-])\d{3}-\d{4}(?![\d\-])/,   // 〒, (12345), 일본 100-0006
+                  /(?<![\d\-])\d{5}(?:-\d{4})?(?![\d\-])/, /(?<![\d\-])\d{6}(?![\d\-])/];   // 한국·미국 5자리, 중국 6자리
+    for (const zr of ZIPS){
+      const zip = addr.match(zr);
+      if (zip){ out.addressDetail = zip[0].replace(/[〒()\s]/g,''); addr = addr.replace(zip[0], ' '); break; }
+    }
+    out.address = addr.replace(/^(주소|address|addr\.?|add\.?)\s*[:.]?\s*/i,'')
+      .replace(/\s+([,.])/g,'$1').replace(/,\s*,/g,',').replace(/\s{2,}/g,' ').trim().replace(/^[,\s]+|[,\s]+$/g,'');
   }
 
   // 5) 회사명 (회사 키워드 줄, 글자 큰 것 우선)
@@ -1557,11 +1780,12 @@ function extractFields(text, lines){
     }
   }
   // 8) 부서
-  const dl = out.companySub ? null : L.find(l=>!used.has(l) && RX.dept.test(l.t) && !RX.company.test(l.t) && l.t.length <= 30 && !/\d{3,}/.test(l.t));
-  if (dl){
-    if (out.title && dl.t.includes(out.title)) out.companySub = dl.t.replace(out.title,'').trim();
-    else out.companySub = dl.t;
-    used.add(dl);
+  if (!out.companySub){                                                          // 부서 줄 최대 3개를 이어 붙임
+    const dls = L.filter(l=>!used.has(l) && RX.dept.test(l.t) && !RX.company.test(l.t) && l.t.length <= 45 && !/\d{3,}/.test(l.t)).slice(0,3);
+    if (dls.length){
+      out.companySub = dls.map(l=>out.title && l.t.includes(out.title) ? l.t.replace(out.title,'').trim() : l.t).filter(Boolean).join(' · ');
+      dls.forEach(l=>used.add(l));
+    }
   }
   // 9) 회사가 없으면 가장 큰 남은 줄(영문 대문자 로고 등)
   if (!out.company){
