@@ -1,23 +1,56 @@
-plugins { id 'com.android.application' }
+// ================================================================
+// 명함보관함(BusinessCards) 앱 모듈 빌드 설정
+//  - WebView 앱 + Google ML Kit 문서 스캐너(스캔 모드) + 한글 OCR
+// ================================================================
+plugins { id 'com.android.application' }   // 안드로이드 앱 플러그인
 
 android {
-    namespace 'com.jskimlam.businesscards'
-    compileSdk 35
+    namespace 'com.jskimlam.businesscards'   // 패키지 네임스페이스
+    compileSdk 35                             // 컴파일 SDK
 
     defaultConfig {
-        applicationId 'com.jskimlam.businesscards'
-        minSdk 26
-        targetSdk 34
-        versionCode 1
-        versionName '1.0.0'
+        applicationId 'com.jskimlam.businesscards'  // 기존 앱과 동일 ID
+        minSdk 26                                    // 안드로이드 8.0 이상
+        targetSdk 34                                 // 타깃 SDK
+        versionCode 2                                // 스캔 모드 버전 (1 → 2)
+        versionName '2.0.0'                          // 표시 버전
+    }
+
+    // ------------------------------------------------------------
+    // 서명 설정: GitHub Secrets(SIGNING_*)가 있으면 고정 키로 서명,
+    // 없으면 빌드 머신의 디버그 키로 서명(매 빌드 키가 달라질 수 있음)
+    // ------------------------------------------------------------
+    signingConfigs {
+        release {
+            def ksPath = System.getenv('SIGNING_KEYSTORE_PATH')   // 키스토어 파일 경로
+            if (ksPath != null && new File(ksPath).exists()) {     // 키스토어가 있을 때만
+                storeFile file(ksPath)                              // 키스토어 지정
+                storePassword System.getenv('SIGNING_STORE_PASSWORD') // 저장소 비번
+                keyAlias System.getenv('SIGNING_KEY_ALIAS')         // 키 별칭
+                keyPassword System.getenv('SIGNING_KEY_PASSWORD')   // 키 비번
+            }
+        }
     }
 
     buildTypes {
-        release { minifyEnabled false }
-        debug { debuggable true }
+        release {
+            minifyEnabled false                                     // 난독화 미사용(브리지 보호)
+            def ksPath = System.getenv('SIGNING_KEYSTORE_PATH')     // 고정 키 여부 확인
+            signingConfig (ksPath != null && new File(ksPath).exists())
+                    ? signingConfigs.release                        // 고정 키 서명
+                    : signingConfigs.debug                          // 디버그 키 서명
+        }
+        debug { debuggable true }                                   // 디버그 빌드
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_17                  // 자바 17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // 구글 문서 스캐너: 자동 테두리 감지·원근 보정·필터(스캔 모드) UI 제공
+    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1'
+    // 기기 내 한글+영문 OCR (인터넷·API 키 불필요, 모델 앱에 포함)
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
 }
