@@ -36,9 +36,8 @@ android {
         release {
             minifyEnabled false                                     // 난독화 미사용(브리지 보호)
             def ksPath = System.getenv('SIGNING_KEYSTORE_PATH')     // 고정 키 여부 확인
-            signingConfig (ksPath != null && new File(ksPath).exists())
-                    ? signingConfigs.release                        // 고정 키 서명
-                    : signingConfigs.debug                          // 디버그 키 서명
+            def useRelease = (ksPath != null && new File(ksPath).exists()) // 고정 키 존재 여부
+            signingConfig = useRelease ? signingConfigs.release : signingConfigs.debug // 고정 키 또는 디버그 키
         }
         debug { debuggable true }                                   // 디버그 빌드
     }
