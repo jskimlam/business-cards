@@ -14,6 +14,7 @@ android {
         targetSdk 34                                 // 타깃 SDK
         versionCode 2                                // 스캔 모드 버전 (1 → 2)
         versionName '2.0.0'                          // 표시 버전
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' } // 휴대폰용 CPU만 포함(용량 절반)
     }
 
     // ------------------------------------------------------------
