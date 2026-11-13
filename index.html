@@ -453,7 +453,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
-const WEB_VERSION = '2026.11.13-d';                                              // 화면(웹) 버전 — 반영 확인용
+const WEB_VERSION = '2026.11.13-e';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -1619,8 +1619,12 @@ function linesHtml(ocrRes){                                                     
   if (!ocrRes || !ocrRes.text) return '';
   const lines = splitLines(ocrRes);
   if (!lines.length) return '';
-  return `<div class="ocrlines"><div class="hd">인식된 줄 — 칸을 먼저 누르고 줄을 탭하세요</div><div class="wrapl">${
+  return `<div class="ocrlines"><div class="hd" style="display:flex;align-items:center">인식된 줄 — 칸을 먼저 누르고 줄을 탭하세요<button id="copyRaw" style="margin-left:auto;border:0;background:none;color:var(--sub);font-size:11px;text-decoration:underline;cursor:pointer;font-family:inherit">원문 복사</button></div><div class="wrapl">${
     lines.map((t,i)=>`<button class="oline" data-i="${i}">${esc(t)}</button>`).join('')}</div></div>`;
+}
+function fallbackCopy(text, done){                                               // 클립보드 API가 막힌 경우
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch(e){ toastMsg('복사하지 못했어요'); } ta.remove();
 }
 function splitLines(ocrRes){
   const arr = (ocrRes.lines && ocrRes.lines.length) ? ocrRes.lines.map(l=>l.text) : ocrRes.text.split(/\n+/);
@@ -1628,6 +1632,13 @@ function splitLines(ocrRes){
 }
 function bindLines(ocrRes){
   if (!ocrRes) return;
+  const cr = $('copyRaw');                                                       // 인식 원문 복사 (문제 확인용)
+  if (cr) cr.onclick = ()=>{
+    const raw = (ocrRes.lines && ocrRes.lines.length) ? ocrRes.lines.map(l=>l.text).join('\n') : ocrRes.text;
+    const done = ()=>toastMsg('인식 원문을 복사했어요', 1400);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(raw).then(done).catch(()=>fallbackCopy(raw, done));
+    else fallbackCopy(raw, done);
+  };
   const lines = splitLines(ocrRes);
   panel.querySelectorAll('.oline').forEach(b=>b.onclick = ()=>{
     const t = lines[+b.dataset.i]; const el = (lastFocused && panel.contains(lastFocused)) ? lastFocused : $('f_name');
@@ -1745,10 +1756,20 @@ function extractFields(text, lines){
 
   // 4) 주소 (연속된 주소 줄 합치기) + 우편번호
   const addrIdx = [];
-  L.forEach((l,i)=>{ const t = T(l); if (!used.has(l) && RX.addr.test(t) && !RX.email.test(t) && t.length > 4) addrIdx.push(i); });
+  const notContact = t => !RX.email.test(t) && !/(www\.|https?:)/i.test(t);     // 이메일·웹 줄 제외
+  L.forEach((l,i)=>{
+    const t = T(l); if (used.has(l) || t.length <= 4 || !notContact(t)) return;
+    if (RX.addr.test(t) || splitZip(t).zip) addrIdx.push(i);                     // 주소 단서 또는 우편번호가 있으면 주소 줄
+  });
   if (addrIdx.length){
-    const group = addrIdx.filter(i=>!RX.company.test(T(L[i])) || /\d/.test(T(L[i]))).slice(0, 4); // 떨어져 있어도 주소 줄은 순서대로 최대 4줄
-    if (!group.length) group.push(addrIdx[0]);
+    let group = addrIdx.filter(i=>!RX.company.test(T(L[i])) || /\d/.test(T(L[i]))); // 회사명 줄은 숫자가 있을 때만
+    if (!group.length) group = [addrIdx[0]];
+    const lo = group[0], hi = group[group.length-1];
+    for (let i=lo+1; i<hi; i++){                                                 // 주소 줄 사이에 낀 줄도 주소의 일부로
+      const t = T(L[i]);
+      if (!group.includes(i) && !used.has(L[i]) && t && notContact(t) && !RX.title.test(t) && t.length <= 60) group.push(i);
+    }
+    group = group.sort((a,b)=>a-b).slice(0, 5);                                  // 원래 순서대로 최대 5줄
     let addr = group.map(i=>T(L[i])).join(' ');
     group.forEach(i=>used.add(L[i]));
     let sz = splitZip(addr);
@@ -1764,7 +1785,9 @@ function extractFields(text, lines){
   // 5) 회사명 (회사 키워드 줄, 글자 큰 것 우선)
   const compCands = L.filter(l=>!used.has(l) && RX.company.test(l.t) && l.t.length <= 40);
   if (compCands.length){
-    compCands.sort((a,b)=>(b.h - a.h) || (a.t.length - b.t.length));
+    const STRONG = /(㈜|\(주\)|주식회사|유한회사|Co\.?,?\s*Ltd|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|LLC|GmbH|PLC|Pte|株式会社|有限会社|\(株\)|有限公司)/i; // 법인 표기 = 회사명 확실
+    const cScore = l => (STRONG.test(l.t) ? 100 : 0) + (l.t === l.t.toUpperCase() && /[A-Z]{3}/.test(l.t) ? 10 : 0) + (l.h || 0);
+    compCands.sort((a,b)=>(cScore(b) - cScore(a)) || (a.t.length - b.t.length));
     out.company = compCands[0].t.replace(/\s{2,}/g,' ');
     used.add(compCands[0]);
   }
@@ -1812,7 +1835,7 @@ function extractFields(text, lines){
   }
   // 8) 부서
   if (!out.companySub){                                                          // 부서 줄 최대 3개를 이어 붙임
-    const dls = L.filter(l=>!used.has(l) && RX.dept.test(l.t) && !RX.company.test(l.t) && l.t.length <= 45 && !/\d{3,}/.test(l.t)).slice(0,3);
+    const dls = L.filter(l=>!used.has(l) && RX.dept.test(l.t) && !/(㈜|\(주\)|주식회사|Co\.?,?\s*Ltd|Ltd\.|Inc\.|Corp\.|Corporation|株式会社)/i.test(l.t) && l.t.length <= 45 && !/\d{3,}/.test(l.t)).slice(0,3);
     if (dls.length){
       out.companySub = dls.map(l=>out.title && l.t.includes(out.title) ? l.t.replace(out.title,'').trim() : l.t).filter(Boolean).join(' · ');
       dls.forEach(l=>used.add(l));
