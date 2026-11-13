@@ -453,7 +453,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
-const WEB_VERSION = '2026.11.13-f';                                              // 화면(웹) 버전 — 반영 확인용
+const WEB_VERSION = '2026.11.13-g';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -1585,7 +1585,7 @@ async function recognize({display, ocrImage, ocr, el}){
     }
   } catch(err){ ocrRes = null; console.warn('OCR 실패', err); }
 
-  let fields = {}, filledCount = 0;
+  let fields = {}, filledCount = 0, aiFail = '';
   if (ocrRes && ocrRes.text && ocrRes.text.trim()){
     fields = extractFields(ocrRes.text, ocrRes.lines || []);                       // 이름·회사·연락처 추정
     fillForm(fields, false);
@@ -1597,16 +1597,19 @@ async function recognize({display, ocrImage, ocr, el}){
     try {
       const j = await aiParse(display);
       fillForm(j, 'soft');
-      setAIStatus(el, '✅ AI 인식 완료 — 골드 표시 칸을 확인하세요.' + linesHtml(ocrRes), false, true);
+      setAIStatus(el, '✅ AI 인식 완료 — 빨간 줄 칸을 확인하세요.' + linesHtml(ocrRes), false, true);
       bindLines(ocrRes); return;
     } catch(err){
       console.warn('AI 실패 → OCR 결과 사용', err);
-      if (filledCount){ setAIStatus(el, '⚠️ AI 연결 실패로 OCR 결과만 채웠어요. 골드 표시 칸을 확인하세요.' + linesHtml(ocrRes), true); bindLines(ocrRes); return; }
+      const why = esc(err.message || '알 수 없는 오류');
+      if (filledCount){ setAIStatus(el, `⚠️ AI 인식 실패 — ${why}<br>OCR 결과만 채웠어요. 빨간 줄 칸을 확인하세요.` + linesHtml(ocrRes), true); bindLines(ocrRes); return; }
+      setAIStatus(el, `⚠️ AI 인식 실패 — ${why}`, true);
+      aiFail = why;
     }
   }
 
   if (!ocrRes || !ocrRes.text || !ocrRes.text.trim()){
-    setAIStatus(el, '⚠️ 글자를 읽지 못했어요. 밝은 곳에서 다시 스캔하거나 직접 입력하세요.', true); return;
+    setAIStatus(el, (aiFail ? `⚠️ AI 인식 실패 — ${aiFail}<br>` : '⚠️ ') + '글자를 읽지 못했어요. 밝은 곳에서 다시 스캔하거나 직접 입력하세요.', true); return;
   }
   const engine = ocrRes.engine || 'OCR';
   setAIStatus(el, `✅ ${esc(engine)} 인식 완료 — ${filledCount}개 칸을 채웠어요. 아래 인식된 줄을 탭하면 선택한 칸에 들어가요.` + linesHtml(ocrRes), false, true);
@@ -1877,25 +1880,73 @@ function stripFences(s){
   const m = s.match(/\{[\s\S]*\}/);
   return m ? m[0] : s;
 }
-let CACHED_GEMINI_MODEL = null;
-async function resolveGeminiModel(key){
-  if (CFG.model && CFG.model.trim()) return CFG.model.trim();                    // 사용자가 지정한 모델
-  if (CACHED_GEMINI_MODEL) return CACHED_GEMINI_MODEL;
+let CACHED_GEMINI_MODEL = null;                                                  // 이번 실행에서 성공한 모델
+const LS_AIMODEL = 'cards_ai_model_ok';                                          // 마지막으로 성공한 모델 기억
+/* 시도할 Gemini 모델 목록: 성공 기억 → 안정판 Flash → 안정판 Flash-Lite → latest 별칭 */
+async function geminiCandidates(key){
+  if (CFG.model && CFG.model.trim()) return [CFG.model.trim()];                  // 사용자가 지정한 모델만
+  const list = [];
+  const remembered = CACHED_GEMINI_MODEL || localStorage.getItem(LS_AIMODEL);
+  if (remembered) list.push(remembered);
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+    const res = await fetchTimeout(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200`, { headers:{ 'x-goog-api-key':key } }, 12000);
     if (res.ok){
       const data = await res.json();
       const avail = (data.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
-      const flash = avail.filter(m=>/flash/.test(m) && !/(image|tts|thinking|live|audio|embedding)/.test(m));
-      flash.sort((a,b)=>{                                                          // 버전 높은 flash 우선, preview는 뒤로
-        const va = parseFloat((a.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0), vb = parseFloat((b.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0);
-        return (vb - va) || (/preview|exp/.test(a) - /preview|exp/.test(b)) || (/lite/.test(a) - /lite/.test(b));
-      });
-      CACHED_GEMINI_MODEL = flash[0] || (avail.includes('gemini-flash-latest') ? 'gemini-flash-latest' : avail[0]);
-      if (CACHED_GEMINI_MODEL) return CACHED_GEMINI_MODEL;
+      const ver = m => parseFloat((m.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1]||0);
+      const flash = avail.filter(m=>/flash/.test(m) && !/(image|tts|thinking|live|audio|embedding|native|exp)/.test(m));
+      const stable = flash.filter(m=>!/preview/.test(m)).sort((x,y)=>ver(y)-ver(x));   // 정식 버전 우선
+      const full = stable.filter(m=>!/lite/.test(m)), lite = stable.filter(m=>/lite/.test(m));
+      if (full[0]) list.push(full[0]);
+      if (lite[0]) list.push(lite[0]);
+      if (full[1]) list.push(full[1]);
+      flash.filter(m=>/preview/.test(m)).sort((x,y)=>ver(y)-ver(x)).slice(0,1).forEach(m=>list.push(m)); // 미리보기는 마지막
+    } else if (res.status === 400 || res.status === 401 || res.status === 403){
+      throw await aiError(res);                                                  // 키 자체 문제는 바로 알림
     }
-  } catch(e){ console.warn('모델 목록 조회 실패', e); }
-  return 'gemini-flash-latest';
+  } catch(e){ if (e && e.fatal) throw e; console.warn('모델 목록 조회 실패', e); }
+  list.push('gemini-flash-latest', 'gemini-flash-lite-latest');                  // 별칭(항상 최신)
+  return [...new Set(list)].slice(0, 5);
+}
+/* 응답 오류 → 한국어 이유 */
+async function aiError(res){
+  let body = ''; try { body = await res.text(); } catch(e){}
+  const st = res.status; let msg, fatal = false;
+  if (st === 400 && /API key not valid|API_KEY_INVALID/i.test(body)){ msg = 'API 키가 올바르지 않아요. 설정에서 키를 다시 확인하세요'; fatal = true; }
+  else if (st === 401 || st === 403){ msg = '키 권한 문제예요(API 사용 설정 또는 키 제한 확인)'; fatal = true; }
+  else if (st === 429) msg = '무료 사용 한도를 넘었어요. 잠시 후 다시 시도하세요';
+  else if (st === 404) msg = '이 키로 쓸 수 없는 모델이에요';
+  else if (st >= 500) msg = 'Gemini 서버가 바빠요. 잠시 후 다시 시도하세요';
+  else msg = `오류 ${st}`;
+  const e = new Error(msg); e.status = st; e.fatal = fatal; e.detail = body.slice(0, 200);
+  return e;
+}
+/* Gemini 호출: 후보 모델을 차례로 시도 */
+async function geminiGenerate(parts, wantJson){
+  const key = CFG.key;
+  const models = await geminiCandidates(key);
+  let lastErr = null;
+  for (const m of models){
+    try {
+      const res = await fetchTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+        method:'POST', headers:{ 'Content-Type':'application/json', 'x-goog-api-key':key },
+        body: JSON.stringify({ contents:[{ parts }], generationConfig: wantJson ? { temperature:0.1, response_mime_type:'application/json' } : { temperature:0 } })
+      }, 35000);
+      if (!res.ok) throw await aiError(res);
+      const j = await res.json();
+      const text = (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+      if (!text) throw new Error('빈 응답');
+      CACHED_GEMINI_MODEL = m; try { localStorage.setItem(LS_AIMODEL, m); } catch(e){}  // 성공 모델 기억
+      return { text, model:m };
+    } catch(err){
+      if (err.name === 'AbortError') err = new Error('응답 시간이 초과됐어요');
+      else if (err instanceof TypeError) err = new Error('인터넷 연결을 확인하세요');
+      lastErr = err;
+      if (err.fatal) break;                                                      // 키 문제면 다른 모델 시도 무의미
+      if (m === localStorage.getItem(LS_AIMODEL)) { try { localStorage.removeItem(LS_AIMODEL); } catch(e){} }
+    }
+  }
+  throw lastErr || new Error('Gemini 응답 실패');
 }
 async function fetchTimeout(url, opts, ms){                                      // 시간 제한 fetch
   const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), ms);
@@ -1908,32 +1959,33 @@ async function aiParse(dataUrl){
       method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+CFG.key},
       body: JSON.stringify({ model: CFG.model || 'gpt-4o-mini', response_format:{type:'json_object'},
         messages:[{role:'user',content:[{type:'text',text:AI_PROMPT},{type:'image_url',image_url:{url:dataUrl}}]}], max_tokens:800 })
-    }, 20000);
-    if (!res.ok){ throw new Error('OpenAI ' + res.status + ' — ' + (await res.text()).slice(0,120)); }
+    }, 30000);
+    if (!res.ok) throw await aiError(res);
     const j = await res.json();
     return JSON.parse(stripFences(j.choices[0].message.content));
   }
   const mime = (dataUrl.match(/^data:([^;]+);base64,/)||[])[1] || 'image/jpeg';
   const b64 = dataUrl.split(',')[1];
-  const model = await resolveGeminiModel(CFG.key);
-  const tryModels = [...new Set([model, 'gemini-flash-latest'])];
-  let lastErr = null;
-  for (const m of tryModels){
-    try {
-      const res = await fetchTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
-        method:'POST', headers:{ 'Content-Type':'application/json', 'x-goog-api-key':CFG.key },
-        body: JSON.stringify({ contents:[{ parts:[{ text:AI_PROMPT }, { inline_data:{ mime_type:mime, data:b64 } }] }],
-          generationConfig:{ temperature:0.1, response_mime_type:'application/json' } })
-      }, 20000);
-      if (!res.ok) throw new Error(`HTTP ${res.status} — ${(await res.text()).slice(0,120)}`);
-      const j = await res.json();
-      const text = (j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
-      const r = JSON.parse(stripFences(text));
-      if (r && (r.name || r.company || r.mobile || r.tel || r.email)) return r;
-      throw new Error('빈 응답');
-    } catch(err){ lastErr = err; }
-  }
-  throw lastErr || new Error('Gemini 응답 실패');
+  const { text } = await geminiGenerate([{ text:AI_PROMPT }, { inline_data:{ mime_type:mime, data:b64 } }], true);
+  const r = JSON.parse(stripFences(text));
+  if (r && (r.name || r.company || r.mobile || r.tel || r.email)) return r;
+  throw new Error('AI가 명함 내용을 찾지 못했어요');
+}
+/* 설정의 '연결 테스트' */
+async function testAI(){
+  const out = $('s_test_out'); if (!out) return;
+  if (!CFG.key){ out.textContent = '먼저 키를 입력하고 저장하세요'; return; }
+  out.innerHTML = '<span class="spin"></span>연결 확인 중…';
+  try {
+    if (CFG.provider === 'openai'){
+      const res = await fetchTimeout('https://api.openai.com/v1/models', { headers:{ Authorization:'Bearer '+CFG.key } }, 15000);
+      if (!res.ok) throw await aiError(res);
+      out.innerHTML = '✅ OpenAI 연결 성공';
+    } else {
+      const { model } = await geminiGenerate([{ text:'Reply with OK' }], false);
+      out.innerHTML = `✅ 연결 성공 · 사용 모델 <b>${esc(model)}</b>`;
+    }
+  } catch(err){ out.innerHTML = `⚠️ ${esc(err.message)}${err.detail ? `<br><small style="color:var(--faint);word-break:break-all">${esc(err.detail)}</small>` : ''}`; }
 }
 
 /* =========================================================
@@ -1955,7 +2007,9 @@ gearBtn.onclick = ()=>{
     <div class="btns" style="margin-top:6px">
       <button class="btn ghost" id="s_clear">키 지우기</button>
       <button class="btn ink" id="s_save">저장</button>
+      <button class="btn full" id="s_test">연결 테스트</button>
     </div>
+    <div class="note" id="s_test_out" style="display:block">키를 저장한 뒤 연결 테스트를 눌러 보세요.${localStorage.getItem(LS_AIMODEL)?` 최근 성공 모델: <b>${esc(localStorage.getItem(LS_AIMODEL))}</b>`:''}</div>
     <div class="sdiv"></div>
     <h2 class="sh" style="font-size:18px">백업 · 복원</h2>
     <p class="shd">직접 스캔한 명함 <b style="color:var(--ink)">${MY.length}장</b>을 파일 하나로 저장해요. 앱을 다시 설치하거나 기기를 바꿀 때 복원하세요.</p>
@@ -1967,9 +2021,13 @@ gearBtn.onclick = ()=>{
   $('s_provider').onchange = e=>{ $('s_model').placeholder = e.target.value==='openai' ? 'gpt-4o-mini' : '자동'; };
   $('s_save').onclick = ()=>{
     CFG = { provider:$('s_provider').value, model:$('s_model').value.trim(), key:$('s_key').value.trim() };
-    CACHED_GEMINI_MODEL = null;
+    CACHED_GEMINI_MODEL = null; try { localStorage.removeItem(LS_AIMODEL); } catch(e){}
     localStorage.setItem(LS_CFG, JSON.stringify(CFG));
     rebuild(); closeSheet(); toastMsg(CFG.key ? 'AI 설정을 저장했어요' : '설정을 저장했어요');
+  };
+  $('s_test').onclick = ()=>{                                                      // 입력값을 반영한 뒤 테스트
+    CFG = { provider:$('s_provider').value, model:$('s_model').value.trim(), key:$('s_key').value.trim() };
+    localStorage.setItem(LS_CFG, JSON.stringify(CFG)); CACHED_GEMINI_MODEL = null; rebuild(); testAI();
   };
   $('s_clear').onclick = ()=>{ CFG.key=''; localStorage.setItem(LS_CFG, JSON.stringify(CFG)); $('s_key').value=''; rebuild(); toastMsg('키를 지웠어요'); };
   $('b_export').onclick = exportBackup;
