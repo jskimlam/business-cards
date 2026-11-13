@@ -453,7 +453,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
-const WEB_VERSION = '2026.11.13-e';                                              // 화면(웹) 버전 — 반영 확인용
+const WEB_VERSION = '2026.11.13-f';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -1684,7 +1684,7 @@ async function tesseractOCR(dataUrl, onProgress){
    M. 텍스트 → 명함 항목 추출 (휴리스틱)
    ========================================================= */
 const RX = {
-  email:/[A-Za-z0-9._%+-]+\s?@\s?[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+  email:/[A-Za-z0-9_%+-]+(?:\s?[.]\s?[A-Za-z0-9_%+-]+)*\s?@\s?[A-Za-z0-9-]+(?:\s?\.\s?[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/,
   url:/(?:https?:\/\/|www\.)[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+|\b[a-z0-9-]+\.(?:co\.kr|com|net|kr|co\.jp|jp|cn|com\.cn|org)\b/i,
   title:/(대표이사|대표|회장|부회장|사장|부사장|전무이사|전무|상무이사|상무보|상무|이사대우|이사|실장|본부장|센터장|부문장|사업부장|공장장|소장|지점장|지사장|부장|차장|과장|대리|주임|사원|팀장|파트장|그룹장|수석연구원|책임연구원|선임연구원|연구원|책임|선임|수석|매니저|프로|위원|고문|교수|변호사|회계사|세무사|CEO|CTO|CFO|COO|President|Vice President|VP|Director|General Manager|Manager|Engineer|Specialist|Executive|Chairman|Partner|Consultant|Analyst|Officer|Head of|Senior|Associate|Representative|社長|副社長|専務|常務|取締役|部長|次長|課長|係長|主任|室長|代表|担当|经理|总经理|董事长|主管)/i,
   company:/(㈜|\(주\)|\(유\)|주식회사|유한회사|유한책임회사|그룹|코퍼레이션|케미칼|케미컬|화학|석유|정유|산업|전자|건설|무역|상사|물산|홀딩스|해운|물류|로지스틱스|은행|증권|보험|Co\.?,?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|Company|Group|Holdings|LLC|GmbH|S\.A\.|PLC|Pte\.?|株式会社|有限会社|\(株\)|集团|有限公司)/i,
@@ -1803,14 +1803,26 @@ function extractFields(text, lines){
     if (!t) { if (title && !out.title){ out.title = l.t.trim(); used.add(l); } continue; }
     const hangul = t.replace(/\s/g,'');
     let score = 0, name = null, kind = null;
-    if (/^[가-힣]{2,4}$/.test(hangul) && !RX.company.test(t) && !/(본부|부문|팀|실|센터|연구소|지점|지사|공장|사무소|그룹)$/.test(hangul)){ /* 한글 이름(부서명 제외) */ name = hangul; kind = 'ko'; score = 3; }
+    const DEPT_END = /(본부|부문|팀|실|센터|연구소|지점|지사|공장|사무소|그룹)$/;
+    const toks = t.split(/\s+/).filter(Boolean);
+    let subGuess = null;                                                         // 같은 줄의 한자·영문 표기
+    if (toks.length > 1 && toks.every(x=>/^[가-힣]$/.test(x)) && toks.length <= 8){   // '박 서 윤 부 빠 하' 처럼 한 글자씩 띄운 경우
+      const half = (toks.length >= 4 && toks.length % 2 === 0) ? toks.length/2 : Math.min(toks.length, 4); // 한글+한자 같은 길이면 앞 절반
+      t = toks.slice(0, half).join('');
+    } else if (toks.length > 1 && /^[가-힣]{2,4}$/.test(toks[0]) && !DEPT_END.test(toks[0]) && !RX.company.test(t) && !/\d/.test(t)){ // '박서윤 부빠하' → 첫 단어가 이름
+      const rest = toks.slice(1).join(' ');
+      if (/^[\u4e00-\u9fff\sA-Za-z.\-']+$/.test(rest)) subGuess = rest;           // 뒤가 한자·영문이면 보조 이름(한글 오인식은 버림)
+      t = toks[0];
+    }
+    const hangul2 = t.replace(/\s/g,'');
+    if (/^[가-힣]{2,4}$/.test(hangul2) && !RX.company.test(t) && !DEPT_END.test(hangul2)){ /* 한글 이름(부서명 제외) */ name = hangul2; kind = 'ko'; score = 3; }
     else if (/^[一-鿿]{1,3}\s?[一-鿿]{1,3}$/.test(t) && t.replace(/\s/g,'').length <= 5 && !RX.company.test(t) && !/[部課室所社局]$/.test(t)){ /* 한자/일본 이름(부서 제외) */ name = t; kind = 'cjk'; score = 2.4; }
     else if (/^[A-Z][a-zA-Z'\-]+(\s+[A-Z][a-zA-Z'\-.]*){1,2}$/.test(t) && !RX.company.test(t) && !RX.title.test(t) && t.length <= 30){ name = t; kind = 'en'; score = 2; }
     else if (/^[A-Z]{2,}(\s+[A-Z]{2,}){1,2}$/.test(t) && t.length <= 28 && !RX.company.test(t)){ name = t.replace(/\b([A-Z])([A-Z]+)\b/g,(a,b,c)=>b+c.toLowerCase()); kind = 'en'; score = 1.6; }
     if (!name) continue;
     if (title) score += 1.2;                                                     // 직함이 붙어 있으면 이름일 확률↑
     score += l.h ? l.h / 20 : 0;                                                 // 글자가 클수록 이름일 확률↑
-    nameCands.push({ l, name, title, kind, score });
+    nameCands.push({ l, name, title, kind, score, subGuess });
   }
   nameCands.sort((a,b)=>b.score - a.score);
   if (nameCands.length){
@@ -1818,7 +1830,8 @@ function extractFields(text, lines){
     out.name = top.name; used.add(top.l);
     if (top.title && !out.title) out.title = top.title;
     const sub = nameCands.find(c=>c !== top && c.kind !== top.kind);              // 다른 표기(한자/영문) = 보조 이름
-    if (sub){ out.nameSub = sub.name; used.add(sub.l); }
+    if (top.subGuess) out.nameSub = top.subGuess;
+    else if (sub){ out.nameSub = sub.name; used.add(sub.l); }
   }
 
   // 7) 직함 (아직 없으면 직함 키워드 줄)
