@@ -1,5 +1,5 @@
 /* THE EXECUTIVE VAULT service worker — network-first for HTML, cache-first for static assets */
-const CACHE = 'cards-cache-v8';
+const CACHE = 'cards-cache-v10';
 const ASSETS = [
   './',
   './index.html',
