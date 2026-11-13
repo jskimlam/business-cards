@@ -12,8 +12,8 @@ android {
         applicationId 'com.jskimlam.businesscards'  // 기존 앱과 동일 ID
         minSdk 26                                    // 안드로이드 8.0 이상
         targetSdk 34                                 // 타깃 SDK
-        versionCode 2                                // 스캔 모드 버전 (1 → 2)
-        versionName '2.0.0'                          // 표시 버전
+        versionCode 3                                // 새 디자인 버전
+        versionName '2.1.0'                          // 표시 버전
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' } // 휴대폰용 CPU만 포함(용량 절반)
     }
 

@@ -18,6 +18,7 @@ import android.net.Uri;                                // URI
 import android.os.Build;                               // OS 버전
 import android.os.Bundle;                              // 상태 번들
 import android.os.Environment;                         // 공용 폴더 경로
+import android.view.View;                              // 시스템바 아이콘 색
 import android.provider.MediaStore;                    // 미디어 저장소
 import android.util.Base64;                            // Base64 인코딩/디코딩
 import android.webkit.CookieManager;                   // 쿠키 설정
@@ -51,6 +52,8 @@ import org.json.JSONArray;                             // JSON 배열
 import org.json.JSONObject;                            // JSON 객체
 
 import java.io.ByteArrayOutputStream;                  // 바이트 버퍼
+import java.io.File;                                   // 캐시 파일
+import java.io.FileOutputStream;                       // 파일 쓰기
 import java.io.InputStream;                            // 입력 스트림
 import java.io.OutputStream;                           // 출력 스트림
 import java.nio.charset.StandardCharsets;              // UTF-8
@@ -64,7 +67,8 @@ import java.util.concurrent.Executors;                 // 스레드풀 생성
  */
 public class MainActivity extends Activity {
     private static final String HOME = "https://jskimlam.github.io/business-cards/"; // 웹앱 주소
-    private static final String APP_VERSION = "2.0.0";                                // 브리지 버전
+    private static final String APP_VERSION = "2.1.0";                                // 브리지 버전
+    private static final int PAPER = Color.rgb(244, 241, 234);                        // 새 디자인 바탕색(종이)
     private static final int FILE_CHOOSER_REQUEST = 1001;                             // 파일 선택 요청코드
     private static final int SCAN_REQUEST = 1002;                                     // 스캐너 요청코드
     private static final int PERMISSION_REQUEST_CAMERA = 2001;                        // 카메라 권한 요청코드
@@ -76,6 +80,7 @@ public class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor(); // 무거운 작업용 스레드
     private TextRecognizer recognizer;                         // 한글 OCR 엔진(지연 생성)
     private boolean scanInProgress = false;                    // 스캐너 중복 실행 방지
+    private boolean scanForChooser = false;                    // 웹의 카메라 버튼에서 연 스캔인지
 
     /** 앱 내부 주소인지 판별 (외부 링크는 다른 앱으로 넘김) */
     private boolean isAppUrl(Uri uri) {
@@ -91,14 +96,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);                                 // 부모 초기화
-        getWindow().setStatusBarColor(Color.rgb(9, 9, 12));                 // 상단바 색
-        getWindow().setNavigationBarColor(Color.rgb(9, 9, 12));             // 하단바 색
+        applySystemBars(PAPER, true);                                       // 상단·하단바: 종이색 + 어두운 아이콘
 
         FrameLayout root = new FrameLayout(this);                           // 루트 레이아웃
-        root.setBackgroundColor(Color.rgb(9, 9, 12));                       // 배경색
+        root.setBackgroundColor(PAPER);                                     // 배경색
 
         webView = new WebView(this);                                        // 웹뷰 생성
-        webView.setBackgroundColor(Color.rgb(9, 9, 12));                    // 로딩 중 흰 화면 방지
+        webView.setBackgroundColor(PAPER);                                  // 로딩 중 깜빡임 방지
         root.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)); // 전체 화면
         setContentView(root);                                               // 화면 지정
@@ -160,6 +164,13 @@ public class MainActivity extends Activity {
                     fileCallback = null;
                 }
                 fileCallback = newCallback;                                 // 새 콜백 저장
+                boolean wantsImage = false;                                 // 이미지 요청인지
+                for (String t : params.getAcceptTypes()) if (t != null && t.startsWith("image")) wantsImage = true;
+                if (params.isCaptureEnabled() && wantsImage) {              // <input capture> = 카메라 버튼
+                    scanForChooser = true;                                  // 결과를 파일 선택 콜백으로
+                    launchScanner();                                        // 앨범 대신 스캔 모드
+                    return true;
+                }
                 try {
                     Intent intent = params.createIntent();                  // 기본 파일 선택기
                     startActivityForResult(intent, FILE_CHOOSER_REQUEST);
@@ -243,11 +254,13 @@ public class MainActivity extends Activity {
                         startIntentSenderForResult(intentSender, SCAN_REQUEST, null, 0, 0, 0); // 스캐너 화면 열기
                     } catch (IntentSender.SendIntentException e) {
                         scanInProgress = false;
+                        finishChooser(null);
                         sendScanError("스캐너를 열 수 없습니다: " + e.getMessage());
                     }
                 })
                 .addOnFailureListener(e -> {                                // 구글 Play 서비스 문제 등
                     scanInProgress = false;
+                    finishChooser(null);
                     sendScanError("스캔 모드를 사용할 수 없습니다(구글 Play 서비스 확인 필요). 앱 내 카메라로 전환합니다.");
                 });
     }
@@ -370,6 +383,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String getAppVersion() { return APP_VERSION; }
 
+        /** 웹 화면에 맞춰 시스템바 색 변경 (예: 카메라 화면은 검정) */
+        @JavascriptInterface
+        public void setSystemBars(final String hex, final boolean darkIcons) {
+            runOnUiThread(() -> {
+                try { applySystemBars(Color.parseColor(hex), darkIcons); } catch (Exception ignored) {}
+            });
+        }
+
         /** 네이티브 스캔 모드 지원 여부 */
         @JavascriptInterface
         public boolean hasScanner() { return true; }
@@ -489,6 +510,40 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** 웹 파일 선택 콜백 마무리 (스캔 결과 또는 취소) */
+    private void finishChooser(Uri uri) {
+        if (!scanForChooser) return;
+        scanForChooser = false;
+        if (fileCallback != null) {
+            fileCallback.onReceiveValue(uri == null ? null : new Uri[]{uri});
+            fileCallback = null;
+        }
+    }
+
+    /** 스캔 이미지를 앱 캐시로 복사 (웹뷰가 확실히 읽을 수 있게) */
+    private Uri copyToCache(Uri src) {
+        try {
+            File out = new File(getCacheDir(), "scan_" + System.currentTimeMillis() + ".jpg");
+            try (InputStream in = getContentResolver().openInputStream(src);
+                 FileOutputStream os = new FileOutputStream(out)) {
+                byte[] buf = new byte[16384]; int n;
+                while (in != null && (n = in.read(buf)) > 0) os.write(buf, 0, n);
+            }
+            return Uri.fromFile(out);
+        } catch (Exception e) {
+            return src;                                                     // 복사 실패 시 원본 그대로
+        }
+    }
+
+    /** 상단·하단 시스템바 색과 아이콘 밝기 */
+    private void applySystemBars(int color, boolean darkIcons) {
+        getWindow().setStatusBarColor(color);
+        getWindow().setNavigationBarColor(color);
+        int flags = 0;
+        if (darkIcons) flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        getWindow().getDecorView().setSystemUiVisibility(flags);
+    }
+
     /** 다운로드/BusinessCards 폴더에 파일 쓰기 (안드로이드 10 이상) */
     private Uri writeDownload(String fileName, String mime, byte[] bytes) throws Exception {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null;     // 구버전 미지원
@@ -512,11 +567,15 @@ public class MainActivity extends Activity {
             if (resultCode == RESULT_OK && data != null) {
                 GmsDocumentScanningResult result = GmsDocumentScanningResult.fromActivityResultIntent(data);
                 if (result != null && result.getPages() != null && !result.getPages().isEmpty()) {
-                    processScanResult(result.getPages().get(0).getImageUri()); // 첫 페이지 처리
+                    Uri page = result.getPages().get(0).getImageUri();      // 첫 페이지
+                    if (scanForChooser) finishChooser(copyToCache(page));   // 웹 카메라 버튼 → 파일로 전달
+                    else processScanResult(page);                           // 스캔 버튼 → OCR까지
                     return;
                 }
+                finishChooser(null);
                 sendScanError("스캔 결과가 비어 있습니다");
             } else {
+                if (scanForChooser) { finishChooser(null); return; }       // 파일 선택 취소
                 try {                                                       // 사용자가 취소
                     JSONObject c = new JSONObject();
                     c.put("ok", false);
