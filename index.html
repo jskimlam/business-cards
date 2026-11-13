@@ -453,6 +453,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
+const WEB_VERSION = '2026.11.13-c';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -1530,6 +1531,9 @@ function openAddForm({card=null, imageData=null, ocrImage=null, ai=false, ocr=nu
     const phones = [];
     if (v('mobile')) phones.push({type:'mobile', label:'Mobile', number:v('mobile')});
     if (v('tel')) phones.push({type:'tel', label:'Tel', number:v('tel')});
+    if (v('address') && !v('addressDetail')){                                     // 저장 시에도 우편번호 분리
+      const sz = splitZip(v('address')); if (sz.zip){ $('f_address').value = sz.address; $('f_addressDetail').value = sz.zip; }
+    }
     const name = v('name'), company = v('company');
     if (!name && !company){ toastMsg('이름이나 회사 중 하나는 꼭 필요해요'); $('f_name').focus(); return; }
     const obj = {
@@ -1552,6 +1556,11 @@ function openAddForm({card=null, imageData=null, ocrImage=null, ai=false, ocr=nu
 
 /* 폼 채우기: 비어 있는 칸 우선 / 'soft'면 자동값만 덮어쓰기 / true면 모두 덮어쓰기 */
 function fillForm(j, override){
+  j = Object.assign({}, j);
+  if (j.address){                                                                // AI·OCR 어느 쪽이든 주소 속 우편번호 분리
+    const sz = splitZip(j.address);
+    if (sz.zip){ j.address = sz.address; if (!j.addressDetail || String(j.addressDetail).replace(/[^\d]/g,'') === sz.zip.replace(/[^\d]/g,'')) j.addressDetail = sz.zip; }
+  }
   const set = (id, val)=>{
     const el = $('f_'+id); if (!el || val == null) return;
     const s = String(val).trim(); if (!s || s === 'null') return;
@@ -1669,8 +1678,21 @@ const RX = {
   title:/(대표이사|대표|회장|부회장|사장|부사장|전무이사|전무|상무이사|상무보|상무|이사대우|이사|실장|본부장|센터장|부문장|사업부장|공장장|소장|지점장|지사장|부장|차장|과장|대리|주임|사원|팀장|파트장|그룹장|수석연구원|책임연구원|선임연구원|연구원|책임|선임|수석|매니저|프로|위원|고문|교수|변호사|회계사|세무사|CEO|CTO|CFO|COO|President|Vice President|VP|Director|General Manager|Manager|Engineer|Specialist|Executive|Chairman|Partner|Consultant|Analyst|Officer|Head of|Senior|Associate|Representative|社長|副社長|専務|常務|取締役|部長|次長|課長|係長|主任|室長|代表|担当|经理|总经理|董事长|主管)/i,
   company:/(㈜|\(주\)|\(유\)|주식회사|유한회사|유한책임회사|그룹|코퍼레이션|케미칼|케미컬|화학|석유|정유|산업|전자|건설|무역|상사|물산|홀딩스|해운|물류|로지스틱스|은행|증권|보험|Co\.?,?\s*Ltd\.?|Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|Company|Group|Holdings|LLC|GmbH|S\.A\.|PLC|Pte\.?|株式会社|有限会社|\(株\)|集团|有限公司)/i,
   dept:/(본부|사업부|사업팀|부문|팀|실|센터|연구소|지점|지사|사무소|공장|Division|Dept\.?|Department|Team|Office|Unit|Group|事業部|部|課|室)/i,
-  addr:/(특별시|광역시|특별자치|[가-힣]{1,4}도\s|[가-힣]{1,5}[시군구]\s|[가-힣\d]{1,8}(로|길|대로)\s*\d|[가-힣]{1,4}동\s*\d|번길|빌딩|타워|센터\s?\d|\d+층|Street|St\.|Road|Rd\.|Avenue|Ave\.?|Blvd|Pkwy|Parkway|Drive|Dr\.|Lane|Highway|Hwy|Plaza|USA|U\.S\.A|\b[A-Z]{2}\s\d{5}\b|Germany|Taiwan|Hong Kong|Thailand|Vietnam|India|Building|Bldg\.?|Tower|Floor|\d+F\b|Suite|Seoul|Busan|Ulsan|Yeosu|Daesan|Incheon|Tokyo|Osaka|Shanghai|Singapore|Korea|Japan|China|都|道|府|県|区|丁目|番地|〒)/i
+  addr:/(특별시|광역시|특별자치|[가-힣]{1,4}도\s|[가-힣]{1,5}[시군구]\s|[가-힣\d]{1,8}(로|길|대로)\s*\d|[가-힣]{1,4}동\s*\d|번길|빌딩|타워|센터\s?\d|\d+층|-(ku|shi|gu|si|dong|ro|gil|do|cho|machi)\b|\b(City|Province|Prefecture|District|Ward)\b|Street|St\.|Road|Rd\.|Avenue|Ave\.?|Blvd|Pkwy|Parkway|Drive|Dr\.|Lane|Highway|Hwy|Plaza|USA|U\.S\.A|\b[A-Z]{2}\s\d{5}\b|Germany|Taiwan|Hong Kong|Thailand|Vietnam|India|Building|Bldg\.?|Tower|Floor|\d+F\b|Suite|Seoul|Busan|Ulsan|Yeosu|Daesan|Incheon|Tokyo|Osaka|Shanghai|Singapore|Korea|Japan|China|都|道|府|県|区|丁目|番地|〒)/i
 };
+/* 주소 문자열에서 우편번호 분리 (OCR·AI 결과 모두 사용) */
+const ZIPS = [/〒\s*\d{3}\s*-?\s*\d{4}/, /\(\s*\d{5}\s*\)/, /(?<![\d-])\d{3}\s?-\s?\d{4}(?![\d-])/,  // 〒, (12345), 일본 100-0006
+              /(?<![\d-])\d{5}(?:-\d{4})?(?![\d-])/, /(?<![\d-])\d{6}(?![\d-])/];    // 한국·미국 5자리, 중국 6자리
+function splitZip(addr){
+  let a = String(addr||'').replace(/[‐‑‒–—―−ー－]/g,'-').replace(/[　\s]+/g,' ');   // 여러 종류의 대시·공백 통일
+  let zip = '';
+  for (const zr of ZIPS){
+    const m = a.match(zr);
+    if (m){ zip = m[0].replace(/[〒()\s]/g,''); a = a.replace(m[0], ' '); break; }
+  }
+  a = a.replace(/\s+([,.])/g,'$1').replace(/,\s*,/g,',').replace(/\s{2,}/g,' ').trim().replace(/^[,\s]+|[,\s]+$/g,'');
+  return { address:a, zip };
+}
 function extractFields(text, lines){
   const out = {};
   // 1) 줄 목록 정리 (위치·글자 높이가 있으면 함께)
@@ -1714,20 +1736,18 @@ function extractFields(text, lines){
 
   // 4) 주소 (연속된 주소 줄 합치기) + 우편번호
   const addrIdx = [];
-  L.forEach((l,i)=>{ if (!used.has(l) && RX.addr.test(l.t) && !RX.email.test(l.t) && l.t.length > 6) addrIdx.push(i); });
+  L.forEach((l,i)=>{ if (!used.has(l) && RX.addr.test(l.t) && !RX.email.test(l.t) && l.t.length > 4) addrIdx.push(i); });
   if (addrIdx.length){
     const first = addrIdx[0], group = [first];
-    for (let k=1;k<addrIdx.length;k++){ if (addrIdx[k] === group[group.length-1] + 1 && group.length < 3) group.push(addrIdx[k]); }
+    for (let k=1;k<addrIdx.length;k++){ if (addrIdx[k] === group[group.length-1] + 1 && group.length < 4) group.push(addrIdx[k]); }
     let addr = group.map(i=>L[i].t).join(' ');
     group.forEach(i=>used.add(L[i]));
-    const ZIPS = [/〒\s*\d{3}-?\d{4}/, /\(\s*\d{5}\s*\)/, /(?<![\d\-])\d{3}-\d{4}(?![\d\-])/,   // 〒, (12345), 일본 100-0006
-                  /(?<![\d\-])\d{5}(?:-\d{4})?(?![\d\-])/, /(?<![\d\-])\d{6}(?![\d\-])/];   // 한국·미국 5자리, 중국 6자리
-    for (const zr of ZIPS){
-      const zip = addr.match(zr);
-      if (zip){ out.addressDetail = zip[0].replace(/[〒()\s]/g,''); addr = addr.replace(zip[0], ' '); break; }
+    let sz = splitZip(addr);
+    if (!sz.zip){                                                                // 주소 묶음에 없으면 다른 줄에서 우편번호 찾기
+      for (const l of L){ if (used.has(l) || !/[A-Za-z가-힣\u3040-\u9fff]/.test(l.t)) continue; const z = splitZip(l.t); if (z.zip){ sz.zip = z.zip; break; } }
     }
-    out.address = addr.replace(/^(주소|address|addr\.?|add\.?)\s*[:.]?\s*/i,'')
-      .replace(/\s+([,.])/g,'$1').replace(/,\s*,/g,',').replace(/\s{2,}/g,' ').trim().replace(/^[,\s]+|[,\s]+$/g,'');
+    out.address = sz.address.replace(/^(주소|address|addr\.?|add\.?)\s*[:.]?\s*/i,'');
+    if (sz.zip) out.addressDetail = sz.zip;
   }
 
   // 5) 회사명 (회사 키워드 줄, 글자 큰 것 우선)
@@ -1803,7 +1823,7 @@ const AI_PROMPT = `You are a business card reader. Read the business card image 
 Return ONLY a JSON object (no markdown, no commentary) with these keys; use null for anything not present:
 {"name": string, "nameSub": string, "title": string, "company": string, "companySub": string, "mobile": string, "tel": string, "fax": string, "email": string, "website": string, "address": string, "addressDetail": string, "tags": [1-3 short Korean tags]}
 "name" is the person's name in the card's main script (Korean if present); "nameSub" is the same name in another script (Hanja/English/Kanji).
-Keep phone numbers, emails and addresses exactly as printed.`;
+Keep phone numbers, emails and addresses exactly as printed, except: put the postal/ZIP code ONLY in \"addressDetail\" and remove it from \"address\".`;
 function stripFences(s){
   s = String(s||'').trim();
   if (s.startsWith('```')) s = s.replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/,'');
@@ -1875,6 +1895,7 @@ async function aiParse(dataUrl){
 gearBtn.onclick = ()=>{
   openSheet(`
     <h2 class="sh">설정</h2>
+    <div style="font-size:11px;color:var(--faint);margin-top:4px">화면 버전 ${WEB_VERSION}${NATIVE&&NATIVE.getAppVersion?' · 앱 '+esc(NATIVE.getAppVersion()):''}</div>
     <div class="pill"><i></i>${esc(engineName())}${HAS_NATIVE_SCAN?' · 구글 스캔 모드':' · 앱 내 스캔 모드'}</div>
     <p class="shd" style="margin-top:12px">키 없이도 동작해요. Gemini나 OpenAI 키를 넣으면 이름·직함·한자까지 더 정확하게 읽어요. 키는 이 기기에만 저장돼요.</p>
     <div class="setrow"><label>AI 제공사</label>
