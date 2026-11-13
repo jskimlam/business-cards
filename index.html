@@ -385,7 +385,7 @@ footer{max-width:640px;margin:28px auto 0;padding:0 18px;text-align:center;font-
 <!-- 숨김 파일 입력 (카메라 대체 / 앨범 / 백업 복원) -->
 <input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileAlbum" accept="image/*" hidden>
-<input type="file" id="fileRestore" accept="application/json,.json" hidden>
+<input type="file" id="fileRestore" hidden>
 
 <!-- 바텀시트 -->
 <div class="sheet" id="sheet" role="dialog" aria-modal="true">
@@ -1718,7 +1718,13 @@ function exportBackup(){
   if (!MY.length){ toastMsg('백업할 명함이 없어요'); return; }
   const payload = JSON.stringify({ app:'executive-vault', version:2, exportedAt:new Date().toISOString(), cards:MY });
   const name = `명함보관함_백업_${today().replace(/-/g,'')}.json`;
-  if (NATIVE && typeof NATIVE.saveTextFile === 'function'){ NATIVE.saveTextFile(name, 'application/json', payload); return; } // APK
+  if (NATIVE && typeof NATIVE.saveTextFile === 'function'){ NATIVE.saveTextFile(name, 'application/json', payload); return; } // 새 APK
+  if (NATIVE && typeof NATIVE.shareOrSaveImage === 'function'){                   // 구버전 APK: 사진 저장 브리지로 파일 저장
+    const b64 = btoa(unescape(encodeURIComponent(payload)));                     // UTF-8 → Base64
+    NATIVE.shareOrSaveImage(name, 'data:application/json;base64,' + b64);
+    toastMsg('사진/BusinessCards 폴더에 백업 파일을 저장했어요. 공유창에서 드라이브에도 보관하세요', 5000);
+    return;
+  }
   const blob = new Blob([payload], {type:'application/json'});
   const file = new File([blob], name, {type:'application/json'});
   if (navigator.canShare && navigator.canShare({files:[file]})){ navigator.share({files:[file], title:name}).catch(()=>downloadBlob(blob, name)); return; }
