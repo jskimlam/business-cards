@@ -1,5 +1,5 @@
 /* THE EXECUTIVE VAULT service worker — network-first for HTML, cache-first for static assets */
-const CACHE = 'cards-cache-v12';
+const CACHE = 'cards-cache-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -30,15 +30,19 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== location.origin) return;
 
   // HTML 문서는 네트워크 우선 (업데이트 즉시 반영, 오프라인 시 캐시 사용)
-  if (req.mode === 'navigate' || req.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+  // 버전 확인 파일은 항상 네트워크 (캐시 금지)
+  if (url.pathname.endsWith('version.json')) return;
+
+  // HTML·JSON 데이터는 네트워크 우선 + HTTP 캐시 우회 (업데이트 즉시 반영, 오프라인 시 캐시 사용)
+  if (req.mode === 'navigate' || req.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/') || url.pathname.endsWith('.json')) {
     e.respondWith(
-      fetch(req).then((res) => {
+      fetch(req.url, { cache:'no-store' }).then((res) => {
         if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
-      }).catch(() => caches.match('./index.html'))
+      }).catch(() => caches.match(req, { ignoreSearch:true }).then((hit) => hit || caches.match('./index.html')))
     );
     return;
   }

@@ -453,7 +453,7 @@ let CFG = {provider:'gemini', model:'', key:''}; // AI 설정
 let CARDS = [];                                  // 화면에 보여줄 전체 명함
 let state = { q:'', tag:null, sort:'name' };     // 목록 상태
 
-const WEB_VERSION = '2026.11.13-c';                                              // 화면(웹) 버전 — 반영 확인용
+const WEB_VERSION = '2026.11.13-d';                                              // 화면(웹) 버전 — 반영 확인용
 const LS_MY = 'cards_my_v1', LS_CFG = 'cards_ai_cfg_v1', LS_PRIV = 'cards_private_v1'; // 기존 키 유지(데이터 호환)
 try { MY = JSON.parse(localStorage.getItem(LS_MY) || '[]'); } catch(e){ MY = []; }
 try { CFG = Object.assign(CFG, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); } catch(e){}
@@ -1710,7 +1710,7 @@ function extractFields(text, lines){
   }
 
   // 3) 전화 / 휴대폰 / 팩스 (한 줄에 여러 번호와 라벨 처리)
-  const phones = {mobile:[], tel:[], fax:[]}, seen = new Set();
+  const phones = {mobile:[], tel:[], fax:[]}, seen = new Set(), phoneLines = new Set(); // 전화가 들어 있던 줄
   const numRe = /\+?\(?\d[\d\s().\-–—]{6,}\d/g;                                 // 국가번호·(0) 포함 번호 덩어리
   for (const l of L){
     let m; numRe.lastIndex = 0;
@@ -1727,28 +1727,39 @@ function extractFields(text, lines){
       if (/(fax|팩스|F\s*[:.)]?\s*$|传真|ＦＡＸ)/i.test(label)) phones.fax.push(num);
       else if (/(mobile|mob|cell|휴대|핸드폰|H\.?\s?P|M\s*[:.)]?\s*$|C\s*[:.)]?\s*$|携帯|手机)/i.test(label) || /^01[016789]/.test(d2) || /^(\+?81)?0?[789]0\d{8}$/.test(digits)) phones.mobile.push(num);
       else phones.tel.push(num);
-      used.add(l);
+      phoneLines.add(l);
     }
   }
   if (phones.mobile[0]) out.mobile = phones.mobile[0];
   if (phones.tel[0]) out.tel = phones.tel[0];
   if (phones.fax[0]) out.fax = phones.fax[0];
 
+  // 전화가 섞인 줄은 번호·라벨을 지운 나머지 글자만 남김 (주소가 같은 줄에 붙어 읽히는 경우 대비)
+  const PHONE_LABEL = /(direct|tel|phone|fax|mobile|mob|cell|h\.?p|휴대폰?|핸드폰|전화|팩스|직통|대표|携帯|TEL|FAX|[TMFCD]\.?)\s*[:.)]?\s*$/i;
+  phoneLines.forEach(l=>{
+    let r = l.t.replace(numRe, m=>{ const n = m.replace(/\(\s*0\s*\)/,'').replace(/\D/g,'').length; return (n >= 8 && n <= 14) ? '\u0000' : m; }); // 실제 전화번호만 지움(우편번호 보존)
+    r = r.split('\u0000').map(seg=>seg.replace(PHONE_LABEL,'')).join(' ');
+    l.rest = r.replace(/\s{2,}/g,' ').replace(/^[\s,:;/|]+|[\s,:;/|]+$/g,'').trim();
+  });
+  const T = l => phoneLines.has(l) ? (l.rest || '') : l.t;                        // 주소 판단용 글자
+
   // 4) 주소 (연속된 주소 줄 합치기) + 우편번호
   const addrIdx = [];
-  L.forEach((l,i)=>{ if (!used.has(l) && RX.addr.test(l.t) && !RX.email.test(l.t) && l.t.length > 4) addrIdx.push(i); });
+  L.forEach((l,i)=>{ const t = T(l); if (!used.has(l) && RX.addr.test(t) && !RX.email.test(t) && t.length > 4) addrIdx.push(i); });
   if (addrIdx.length){
-    const first = addrIdx[0], group = [first];
-    for (let k=1;k<addrIdx.length;k++){ if (addrIdx[k] === group[group.length-1] + 1 && group.length < 4) group.push(addrIdx[k]); }
-    let addr = group.map(i=>L[i].t).join(' ');
+    const group = addrIdx.filter(i=>!RX.company.test(T(L[i])) || /\d/.test(T(L[i]))).slice(0, 4); // 떨어져 있어도 주소 줄은 순서대로 최대 4줄
+    if (!group.length) group.push(addrIdx[0]);
+    let addr = group.map(i=>T(L[i])).join(' ');
     group.forEach(i=>used.add(L[i]));
     let sz = splitZip(addr);
     if (!sz.zip){                                                                // 주소 묶음에 없으면 다른 줄에서 우편번호 찾기
-      for (const l of L){ if (used.has(l) || !/[A-Za-z가-힣\u3040-\u9fff]/.test(l.t)) continue; const z = splitZip(l.t); if (z.zip){ sz.zip = z.zip; break; } }
+      for (const l of L){ const t = T(l); if (used.has(l) || !/[A-Za-z가-힣\u3040-\u9fff]/.test(t)) continue; const z = splitZip(t); if (z.zip){ sz.zip = z.zip; break; } }
     }
     out.address = sz.address.replace(/^(주소|address|addr\.?|add\.?)\s*[:.]?\s*/i,'');
     if (sz.zip) out.addressDetail = sz.zip;
   }
+
+  phoneLines.forEach(l=>used.add(l));                                            // 전화 줄은 이름·회사 후보에서 제외
 
   // 5) 회사명 (회사 키워드 줄, 글자 큰 것 우선)
   const compCands = L.filter(l=>!used.has(l) && RX.company.test(l.t) && l.t.length <= 40);
@@ -1970,6 +1981,24 @@ search.addEventListener('input', ()=>{ state.q = search.value.trim(); clearBtn.s
 clearBtn.onclick = ()=>{ search.value=''; state.q=''; clearBtn.style.display='none'; render(); search.blur(); };
 if ('serviceWorker' in navigator) addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 load();
+
+/* 새 화면 버전 자동 반영: 앱을 열거나 다시 볼 때 version.json 확인 → 다르면 새로고침 */
+async function checkUpdate(){
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) return;
+    const v = (await res.json()).web;
+    if (!v || v === WEB_VERSION) return;
+    const key = 'reload_for_' + v, n = +(sessionStorage.getItem(key) || 0);
+    if (n >= 2) return;                                                          // 무한 새로고침 방지
+    const busy = sheet.classList.contains('open') || $('scanner').classList.contains('open') || $('review').classList.contains('open');
+    if (busy){ toastMsg('새 버전이 있어요. 지금 작업을 마치면 자동으로 반영돼요', 2600); return; } // 입력 중이면 보류
+    sessionStorage.setItem(key, String(n + 1));
+    location.reload();
+  } catch(e){}
+}
+checkUpdate();
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState === 'visible') checkUpdate(); });
 </script>
 </body>
 </html>
